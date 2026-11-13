@@ -468,6 +468,7 @@ class IndependentVerificationManager
             if (SanctumScanIndependentAttestation::query()
                 ->where('mandate_id', $mandate->getKey())
                 ->where('membership_id', $membershipId)
+                ->lockForUpdate()
                 ->exists()) {
                 return 'attestation_already_recorded';
             }
