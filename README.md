@@ -1189,6 +1189,24 @@ The first exchange workflow does not reserve stock, execute payments, verify del
 
 See [ADR 0005](docs/architecture/decisions/0005-economic-exchange-and-transaction-evidence.md) and the [economic exchange API guide](docs/api/sanctum-scan-exchanges.md).
 
+
+**Milestone 006 — Bilateral dispute and resolution records**
+
+- Either participant can open one dispute after an exchange is accepted.
+- Disputes capture a category, opening statement and append-only participant messages.
+- Either participant may propose a resolution; only the other participant may accept or reject it.
+- Rejected proposals return the dispute to open while preserving the message and event history.
+- The initiating participant may withdraw only before the counterparty responds.
+- Dispute access is scoped to the buyer and merchant on the exchange.
+- Dispute actions append actor-attributed events to the exchange timeline.
+- A mutually accepted resolution does not change exchange, payment or settlement state.
+- Dispute statements are party-declared claims; no independent adjudication or evidence verification is implied.
+
+Buyer dispute endpoints use `/api/user/sanctum/exchanges/{exchangeId}/dispute`; merchant endpoints use `/merchant-api/merchant/sanctum/exchanges/{exchangeId}/dispute`. Both expose read, open, message, propose-resolution, accept-resolution, reject-resolution and withdraw operations.
+
+See [ADR 0006](docs/architecture/decisions/0006-bilateral-dispute-resolution.md) and the [dispute API guide](docs/api/sanctum-scan-disputes.md).
+
+
 **Project:** Atlas Sanctum — Sanctum Scan.
 
 **Initial geographic research context:** Nakuru County, Kenya.
