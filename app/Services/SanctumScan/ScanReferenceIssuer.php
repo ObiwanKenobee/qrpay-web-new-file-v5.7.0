@@ -31,7 +31,9 @@ class ScanReferenceIssuer
         int $resourceId,
         string $displayName,
         ?string $displayDescription = null,
-        ?DateTimeInterface $expiresAt = null
+        ?DateTimeInterface $expiresAt = null,
+        ?string $actorGuard = null,
+        ?int $actorId = null
     ): array {
         if (! in_array($resourceType, self::RESOURCE_TYPES, true)) {
             throw new InvalidArgumentException('Unsupported Sanctum Scan resource type.');
@@ -55,6 +57,18 @@ class ScanReferenceIssuer
             throw new InvalidArgumentException('The expiry time must be in the future.');
         }
 
+        if (($actorGuard === null) !== ($actorId === null)) {
+            throw new InvalidArgumentException('Actor guard and actor ID must be supplied together.');
+        }
+
+        if ($actorGuard !== null && ! in_array($actorGuard, ['merchant_api'], true)) {
+            throw new InvalidArgumentException('Unsupported scan-reference issuing actor.');
+        }
+
+        if ($actorId !== null && $actorId < 1) {
+            throw new InvalidArgumentException('The actor ID must be a positive integer.');
+        }
+
         // 32 cryptographically random bytes encoded as base64url (43 chars).
         $reference = 'snc_' . rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
 
@@ -67,6 +81,8 @@ class ScanReferenceIssuer
             'display_description' => $displayDescription,
             'status' => 'active',
             'expires_at' => $expiresAt,
+            'created_by_guard' => $actorGuard,
+            'created_by_id' => $actorId,
         ]);
 
         return [
@@ -75,12 +91,29 @@ class ScanReferenceIssuer
         ];
     }
 
-    public function revoke(SanctumScanReference $record): SanctumScanReference
-    {
+    public function revoke(
+        SanctumScanReference $record,
+        ?string $actorGuard = null,
+        ?int $actorId = null
+    ): SanctumScanReference {
+        if (($actorGuard === null) !== ($actorId === null)) {
+            throw new InvalidArgumentException('Actor guard and actor ID must be supplied together.');
+        }
+
+        if ($actorGuard !== null && ! in_array($actorGuard, ['merchant_api'], true)) {
+            throw new InvalidArgumentException('Unsupported scan-reference revoking actor.');
+        }
+
+        if ($actorId !== null && $actorId < 1) {
+            throw new InvalidArgumentException('The actor ID must be a positive integer.');
+        }
+
         if ($record->status !== 'revoked') {
             $record->forceFill([
                 'status' => 'revoked',
                 'revoked_at' => now(),
+                'revoked_by_guard' => $actorGuard,
+                'revoked_by_id' => $actorId,
             ])->save();
         }
 
