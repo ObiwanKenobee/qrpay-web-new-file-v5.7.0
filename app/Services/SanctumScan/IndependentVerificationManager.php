@@ -255,6 +255,10 @@ class IndependentVerificationManager
                 return 'invitation_requires_user_acceptance';
             }
 
+            if ($status === 'suspended' && $membership->status !== 'active') {
+                return 'membership_status_change_invalid';
+            }
+
             if ($status === 'active' && $membership->institution->status !== 'active') {
                 return 'institution_unavailable';
             }
