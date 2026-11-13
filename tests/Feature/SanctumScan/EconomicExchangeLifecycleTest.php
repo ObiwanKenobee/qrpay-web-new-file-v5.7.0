@@ -1186,6 +1186,16 @@ class EconomicExchangeLifecycleTest extends TestCase
             ->assertJsonPath('data.attestation.evidence_sha256', $evidence->sha256)
             ->assertJsonPath('data.attestation.outcome', 'corroborated');
 
+        $this->actingAs($verifier, 'api')
+            ->postJson($attestationUrl, [
+                'verification_scope' => 'quality_observation',
+                'verification_method' => 'site_inspection',
+                'outcome' => 'corroborated',
+                'basis_summary' => 'The inspected quality record was corroborated against the documented observation criteria.',
+            ])
+            ->assertStatus(409)
+            ->assertJsonPath('error.code', 'attestation_already_recorded');
+
         $attestation = SanctumScanIndependentAttestation::query()->firstOrFail();
         $this->assertSame($evidence->sha256, $attestation->evidence_sha256);
         $this->assertSame($verifier->getKey(), $attestation->verifier_user_id);
