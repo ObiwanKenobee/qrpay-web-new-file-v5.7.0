@@ -90,7 +90,7 @@ class SanctumScanExchangeMerchantController extends Controller
                 return ['error' => 'A unit is required for this offer.'];
             }
 
-            if ($resource->unit && $validated['unit'] ?? false) {
+            if ($resource->unit && isset($validated['unit'])) {
                 if (strcasecmp($resource->unit, $unit) !== 0) {
                     return ['error' => 'The offer unit must match the registered resource unit.'];
                 }
