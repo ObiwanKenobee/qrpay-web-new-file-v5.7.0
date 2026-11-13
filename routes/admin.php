@@ -45,6 +45,7 @@ use App\Http\Controllers\Admin\RequestMoneyController;
 use App\Http\Controllers\Admin\SendMoneyController;
 use App\Http\Controllers\Admin\ServerInfoController;
 use App\Http\Controllers\Admin\SanctumScanEvidenceReviewController;
+use App\Http\Controllers\Admin\SanctumScanVerifierRegistryController;
 use App\Http\Controllers\Admin\SetupBillPayController;
 use App\Http\Controllers\Admin\SetupEmailController;
 use App\Http\Controllers\Admin\EmailTemplateController;
@@ -106,6 +107,36 @@ Route::name('admin.')->group(function () {
                 Route::post('/{evidenceId}/review', 'review')
                     ->whereNumber('evidenceId')
                     ->name('review');
+            });
+
+        // Platform-curated institution registry and scoped verifier authority.
+        Route::controller(SanctumScanVerifierRegistryController::class)
+            ->prefix('sanctum/verifiers')
+            ->name('sanctum.verifiers.')
+            ->group(function () {
+                Route::get('/', 'index')->name('index');
+                Route::post('/', 'store')->name('store');
+                Route::post('/{institutionId}/members', 'inviteMember')
+                    ->whereNumber('institutionId')
+                    ->name('members.invite');
+                Route::post('/{institutionId}/status', 'setInstitutionStatus')
+                    ->whereNumber('institutionId')
+                    ->name('status');
+                Route::post('/memberships/{membershipId}/status', 'setMembershipStatus')
+                    ->whereNumber('membershipId')
+                    ->name('members.status');
+            });
+
+        Route::controller(SanctumScanVerifierRegistryController::class)
+            ->prefix('sanctum/evidence')
+            ->name('sanctum.evidence.')
+            ->group(function () {
+                Route::post('/{evidenceId}/mandates', 'grantMandate')
+                    ->whereNumber('evidenceId')
+                    ->name('mandates.grant');
+                Route::post('/mandates/{mandateId}/status', 'setMandateStatus')
+                    ->whereNumber('mandateId')
+                    ->name('mandates.status');
             });
 
         // Dashboard Section
