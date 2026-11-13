@@ -469,7 +469,7 @@ class IndependentVerificationManager
                 ->where('mandate_id', $mandate->getKey())
                 ->where('membership_id', $membershipId)
                 ->lockForUpdate()
-                ->exists()) {
+                ->first()) {
                 return 'attestation_already_recorded';
             }
 
