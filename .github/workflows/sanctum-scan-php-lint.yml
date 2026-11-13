@@ -29,18 +29,18 @@ jobs:
 
       - name: Lint changed PHP files
         env:
-          BASE_REF: \${{ github.base_ref }}
+          BASE_REF: ${{ github.base_ref }}
         shell: bash
         run: |
           git fetch origin "$BASE_REF" --depth=1
           mapfile -t php_files < <(git diff --diff-filter=ACMRT --name-only "origin/$BASE_REF...HEAD" -- '*.php')
 
-          if [[ \${#php_files[@]} -eq 0 ]]; then
+          if [[ ${#php_files[@]} -eq 0 ]]; then
             echo "No changed PHP files to lint."
             exit 0
           fi
 
-          for file in "\${php_files[@]}"; do
+          for file in "${php_files[@]}"; do
             echo "Linting $file"
             php -l "$file"
           done
