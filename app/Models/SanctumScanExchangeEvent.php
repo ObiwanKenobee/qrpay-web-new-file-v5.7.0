@@ -12,11 +12,11 @@ class SanctumScanExchangeEvent extends Model
 
     protected static function booted(): void
     {
-        static::updating(function () {
+        static::updating(function (self $event) {
             throw new LogicException('Sanctum Scan exchange events are immutable.');
         });
 
-        static::deleting(function () {
+        static::deleting(function (self $event) {
             throw new LogicException('Sanctum Scan exchange events cannot be deleted.');
         });
     }
