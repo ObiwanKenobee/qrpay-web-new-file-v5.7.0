@@ -19,10 +19,16 @@ class SanctumScanReference extends Model
         'status',
         'expires_at',
         'revoked_at',
+        'created_by_guard',
+        'created_by_id',
+        'revoked_by_guard',
+        'revoked_by_id',
     ];
 
     protected $casts = [
         'resource_id' => 'integer',
+        'created_by_id' => 'integer',
+        'revoked_by_id' => 'integer',
         'expires_at' => 'immutable_datetime',
         'revoked_at' => 'immutable_datetime',
     ];
