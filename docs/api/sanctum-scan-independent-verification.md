@@ -59,7 +59,7 @@ Request fields:
 - mandate_reason: required explanation, 20–2000 characters
 - expires_at: required future date and time
 
-Only one active mandate per institution and evidence item is allowed. A previous expired, completed or revoked mandate can be reissued; its changes are retained in the registry event log.
+Only one active mandate per institution and evidence item is allowed. A previous expired, completed or revoked mandate can be reissued as a new mandate record; the prior scope, expiry and attestations remain linked to the original mandate. Registry changes are retained in the append-only event log.
 
 ### Revoke or complete a mandate
 
