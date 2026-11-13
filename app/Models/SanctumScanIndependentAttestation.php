@@ -60,4 +60,9 @@ class SanctumScanIndependentAttestation extends Model
     {
         return $this->belongsTo(SanctumScanEvidenceVerificationMandate::class, 'mandate_id');
     }
+
+    public function appeals(): HasMany
+    {
+        return $this->hasMany(SanctumScanAttestationAppeal::class, 'attestation_id');
+    }
 }
