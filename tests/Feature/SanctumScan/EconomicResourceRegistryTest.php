@@ -260,6 +260,53 @@ class EconomicResourceRegistryTest extends TestCase
         $this->assertSame('archived', SanctumScanResource::findOrFail($resourceId)->status);
     }
 
+    public function test_reference_code_must_be_unique_for_the_same_merchant_and_resource_type(): void
+    {
+        $merchant = $this->makeMerchant('unique-code-farm', 'Unique Code Farm');
+        $payload = [
+            'resource_type' => 'product',
+            'display_name' => 'First product',
+            'category' => 'Produce',
+            'reference_code' => 'UNIQUE-001',
+        ];
+
+        $this->actingAs($merchant, 'merchant_api')
+            ->postJson('/merchant-api/merchant/sanctum/resources', $payload)
+            ->assertCreated();
+
+        $payload['display_name'] = 'Duplicate product';
+
+        $this->actingAs($merchant, 'merchant_api')
+            ->postJson('/merchant-api/merchant/sanctum/resources', $payload)
+            ->assertUnprocessable();
+
+        $this->assertSame(1, SanctumScanResource::query()->count());
+    }
+
+    public function test_merchant_cannot_rotate_or_archive_another_merchants_resource(): void
+    {
+        $owner = $this->makeMerchant('resource-owner-security', 'Resource Owner');
+        $other = $this->makeMerchant('resource-other-security', 'Other Resource Owner');
+
+        $resource = SanctumScanResource::create([
+            'merchant_id' => $other->getKey(),
+            'resource_type' => 'product',
+            'display_name' => 'Other merchant product',
+            'category' => 'Produce',
+            'status' => 'published',
+        ]);
+
+        $this->actingAs($owner, 'merchant_api')
+            ->postJson('/merchant-api/merchant/sanctum/resources/' . $resource->getKey() . '/scan-reference')
+            ->assertNotFound();
+
+        $this->actingAs($owner, 'merchant_api')
+            ->deleteJson('/merchant-api/merchant/sanctum/resources/' . $resource->getKey())
+            ->assertNotFound();
+
+        $this->assertSame('published', $resource->fresh()->status);
+    }
+
     public function test_unauthenticated_merchant_cannot_create_an_economic_resource(): void
     {
         $this->postJson('/merchant-api/merchant/sanctum/resources', [
