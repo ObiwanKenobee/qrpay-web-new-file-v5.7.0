@@ -1207,6 +1207,26 @@ Buyer dispute endpoints use `/api/user/sanctum/exchanges/{exchangeId}/dispute`; 
 See [ADR 0006](docs/architecture/decisions/0006-bilateral-dispute-resolution.md) and the [dispute API guide](docs/api/sanctum-scan-disputes.md).
 
 
+**Milestone 007 — Private dispute evidence and platform review**
+
+- Either exchange participant can attach PDF, JPEG or PNG evidence (maximum 10 MiB) while the dispute is open.
+- Files are stored on the private `local` filesystem disk under application-generated names; no public storage URL is issued.
+- Evidence metadata stores the detected MIME type, size, submission actor and SHA-256 digest.
+- The same file digest cannot be added to the same dispute more than once.
+- Evidence files and metadata are immutable through their application models.
+- Buyer and merchant downloads are participant-scoped and verify the file digest before streaming.
+- Authenticated platform administrators can review pending evidence using the existing admin role-permission and 2FA protections.
+- Review records are immutable, bind to the exact evidence digest and record the reviewer, method, decision and summary.
+- Review decisions are `verified`, `rejected` or `unable_to_verify`; a new submission starts as `pending`.
+- Platform review is an internal administrator assessment, not independent third-party certification, proof of delivery, product quality or payment settlement.
+- Evidence submission and review do not change the dispute, exchange, wallet, transaction or settlement state.
+
+Buyer evidence endpoints use `/api/user/sanctum/exchanges/{exchangeId}/dispute/evidence`; merchant endpoints use `/merchant-api/merchant/sanctum/exchanges/{exchangeId}/dispute/evidence`. Each prefix supports listing, upload and participant-scoped download. The admin review queue is available under the configured admin route prefix as `admin.sanctum.evidence.*`.
+
+See [ADR 0007](docs/architecture/decisions/0007-private-dispute-evidence-and-platform-review.md) and the [private evidence API guide](docs/api/sanctum-scan-evidence.md).
+
+
+
 **Project:** Atlas Sanctum — Sanctum Scan.
 
 **Initial geographic research context:** Nakuru County, Kenya.
