@@ -83,9 +83,11 @@ class ProvenanceManifestVerifierTest extends TestCase
         $result = $this->verifier->verifyJson($this->encodeDocument($document));
 
         $this->assertFalse($result['valid']);
-        $this->assertTrue(collect($result['errors'])->contains(
+        $matchingErrors = array_filter(
+            $result['errors'],
             fn (string $error) => str_contains($error, 'not bound to evidence')
-        ));
+        );
+        $this->assertNotEmpty($matchingErrors);
     }
 
     public function test_it_verifies_sequential_revision_history_and_reassessment_links(): void
@@ -190,9 +192,11 @@ class ProvenanceManifestVerifierTest extends TestCase
         $result = $this->verifier->verifyJson($this->encodeDocument($document));
 
         $this->assertFalse($result['valid']);
-        $this->assertTrue(collect($result['errors'])->contains(
+        $matchingErrors = array_filter(
+            $result['errors'],
             fn (string $error) => str_contains($error, 'reverse link')
-        ));
+        );
+        $this->assertNotEmpty($matchingErrors);
     }
 
     private function document(): array
