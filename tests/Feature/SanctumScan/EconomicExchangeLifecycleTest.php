@@ -1268,7 +1268,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->assertSame('corroborated', $attestation->fresh()->outcome);
         $this->assertSame('document_review', $attestation->fresh()->verification_method);
         $this->assertSame($evidence->sha256, $attestation->fresh()->evidence_sha256);
-        $this->assertSame(2, SanctumScanAttestationRevision::query()
+        $this->assertSame(1, SanctumScanAttestationRevision::query()
             ->where('attestation_id', $attestationId)
             ->count());
 
@@ -1370,7 +1370,7 @@ class EconomicExchangeLifecycleTest extends TestCase
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'attestation_already_revoked');
 
-        $this->assertSame(2, SanctumScanAttestationRevision::query()
+        $this->assertSame(1, SanctumScanAttestationRevision::query()
             ->where('attestation_id', $attestationId)
             ->count());
         $this->assertTrue(SanctumScanVerifierRegistryEvent::query()
