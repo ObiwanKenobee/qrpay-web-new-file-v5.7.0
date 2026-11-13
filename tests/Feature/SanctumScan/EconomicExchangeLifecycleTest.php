@@ -374,6 +374,30 @@ class EconomicExchangeLifecycleTest extends TestCase
         ]);
     }
 
+    public function test_archiving_resource_after_acceptance_does_not_rewrite_the_agreement_state(): void
+    {
+        $merchant = $this->makeMerchant('accepted-archival-seller', 'Accepted Archival Seller');
+        $buyer = $this->makeBuyer('accepted-archival-buyer');
+        $resource = $this->makeResource($merchant);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/accept')
+            ->assertOk();
+
+        $resource->forceFill([
+            'status' => 'archived',
+            'archived_at' => now(),
+        ])->save();
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/accept')
+            ->assertStatus(409)
+            ->assertJsonPath('error.code', 'invalid_exchange_state');
+
+        $this->assertSame('accepted', SanctumScanExchange::findOrFail($offer['id'])->status);
+    }
+
     public function test_buyer_cannot_accept_an_offer_after_the_resource_has_been_archived(): void
     {
         $merchant = $this->makeMerchant('archived-resource-seller', 'Archived Resource Seller');
