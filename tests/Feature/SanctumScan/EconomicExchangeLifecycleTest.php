@@ -1108,6 +1108,115 @@ class EconomicExchangeLifecycleTest extends TestCase
         ];
     }
 
+    private function makeGovernedAttestationForRevision(string $suffix): array
+    {
+        Storage::fake('local');
+
+        $merchant = $this->makeMerchant('revision-seller-' . $suffix, 'Revision Seller ' . $suffix);
+        $buyer = $this->makeBuyer('revision-buyer-' . $suffix);
+        $verifier = $this->makeBuyer('revision-verifier-' . $suffix);
+        $fixture = $this->makeDisputeEvidenceForVerification($merchant, $buyer, $suffix);
+        $evidence = $fixture['evidence'];
+        $adminId = $this->makeAdminForVerification('revision-' . $suffix);
+        $manager = app(IndependentVerificationManager::class);
+
+        $institution = $manager->registerInstitution($adminId, [
+            'name' => 'Revision Institute ' . $suffix,
+            'organization_type' => 'inspection_body',
+            'country_code' => 'KE',
+        ]);
+
+        $membership = $manager->inviteMember(
+            (int) $institution->getKey(),
+            (int) $verifier->getKey(),
+            $adminId
+        );
+
+        $this->actingAs($verifier, 'api')
+            ->postJson('/api/user/sanctum/verifier/memberships/' . $membership->getKey() . '/accept')
+            ->assertOk();
+
+        $manager->recordCredentialReview(
+            (int) $institution->getKey(),
+            null,
+            $adminId,
+            'institution_registration',
+            'business_registration',
+            'Kenya Business Registration Service',
+            'BRS-REV-' . strtoupper($suffix),
+            'KE',
+            null,
+            'registry_lookup',
+            'verified',
+            'Institution registration was checked against the stated official registry reference.',
+            now()->addYear()->toDateTimeString()
+        );
+
+        $manager->recordCredentialReview(
+            (int) $institution->getKey(),
+            (int) $membership->getKey(),
+            $adminId,
+            'quality_observation',
+            'professional_inspector',
+            'Kenya Bureau of Standards',
+            'KEBS-REV-' . strtoupper($suffix),
+            'KE',
+            null,
+            'issuer_confirmation',
+            'verified',
+            'The verifier credential was checked for this precise quality observation scope.',
+            now()->addYear()->toDateTimeString()
+        );
+
+        $mandate = $manager->grantMandate(
+            (int) $evidence->getKey(),
+            (int) $institution->getKey(),
+            $adminId,
+            'quality_observation',
+            'Review the submitted evidence within the quality observation mandate.',
+            now()->addDays(14)->toDateTimeString()
+        );
+
+        $this->actingAs($verifier, 'api')
+            ->postJson(
+                '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
+                    . '/evidence/' . $evidence->getKey() . '/conflict-declaration',
+                [
+                    'has_conflict' => false,
+                    'disclosure_statement' => 'I have disclosed the relationships and interests known to me for this specific evidence review.',
+                ]
+            )
+            ->assertCreated();
+
+        $attestationResponse = $this->actingAs($verifier, 'api')
+            ->postJson(
+                '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
+                    . '/evidence/' . $evidence->getKey() . '/attestations',
+                [
+                    'verification_scope' => 'quality_observation',
+                    'verification_method' => 'document_review',
+                    'outcome' => 'corroborated',
+                    'basis_summary' => 'The submitted quality evidence was corroborated against the documented observation criteria.',
+                ]
+            )
+            ->assertCreated();
+
+        return [
+            'merchant' => $merchant,
+            'buyer' => $buyer,
+            'verifier' => $verifier,
+            'fixture' => $fixture,
+            'evidence' => $evidence,
+            'exchange_id' => (int) $fixture['exchange_id'],
+            'admin_id' => $adminId,
+            'manager' => $manager,
+            'institution' => $institution,
+            'membership' => $membership,
+            'mandate' => $mandate,
+            'attestation_id' => (int) $attestationResponse->json('data.attestation.id'),
+        ];
+    }
+
     public function test_verifier_account_must_remain_active_and_verified_when_accepting_an_invitation(): void
     {
         $verifier = $this->makeBuyer('unverified-verifier-account');
