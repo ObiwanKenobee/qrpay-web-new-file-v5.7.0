@@ -44,6 +44,7 @@ use App\Http\Controllers\Admin\RemitanceController;
 use App\Http\Controllers\Admin\RequestMoneyController;
 use App\Http\Controllers\Admin\SendMoneyController;
 use App\Http\Controllers\Admin\ServerInfoController;
+use App\Http\Controllers\Admin\SanctumScanEvidenceReviewController;
 use App\Http\Controllers\Admin\SetupBillPayController;
 use App\Http\Controllers\Admin\SetupEmailController;
 use App\Http\Controllers\Admin\EmailTemplateController;
