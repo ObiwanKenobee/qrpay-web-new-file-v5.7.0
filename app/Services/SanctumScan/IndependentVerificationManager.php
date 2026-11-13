@@ -14,6 +14,7 @@ use App\Models\SanctumScanVerifierConflictDeclaration;
 use App\Models\SanctumScanAttestationAppeal;
 use App\Models\SanctumScanAttestationAppealDecision;
 use App\Models\SanctumScanAttestationRevision;
+use App\Models\SanctumScanAttestationReassessment;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
