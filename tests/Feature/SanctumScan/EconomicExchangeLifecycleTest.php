@@ -24,6 +24,7 @@ use App\Models\SanctumScanVerifierConflictDeclaration;
 use App\Models\SanctumScanAttestationAppeal;
 use App\Models\SanctumScanAttestationAppealDecision;
 use App\Models\SanctumScanAttestationRevision;
+use App\Models\SanctumScanAttestationReassessment;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -125,6 +126,8 @@ class EconomicExchangeLifecycleTest extends TestCase
         $appealDecisionMigration->up();
         $attestationRevisionMigration = require base_path('database/migrations/2026_11_13_176000_create_sanctum_scan_attestation_revisions_table.php');
         $attestationRevisionMigration->up();
+        $attestationReassessmentMigration = require base_path('database/migrations/2026_11_13_177000_create_sanctum_scan_attestation_reassessments_table.php');
+        $attestationReassessmentMigration->up();
 
         // Keep Passport authentication, participant status and 2FA checks active.
         // Disable only environment-dependent maintenance, PIN and global KYC gates.
@@ -1314,6 +1317,167 @@ class EconomicExchangeLifecycleTest extends TestCase
             ->exists());
     }
 
+    public function test_a_different_active_member_can_reassess_an_attestation_without_inheriting_the_original_issuer(): void
+    {
+        $context = $this->makeGovernedAttestationForRevision('reassessment');
+        $manager = $context['manager'];
+        $verifier = $context['verifier'];
+        $buyer = $context['buyer'];
+        $institution = $context['institution'];
+        $originalMembership = $context['membership'];
+        $originalMandate = $context['mandate'];
+        $evidence = $context['evidence'];
+        $adminId = $context['admin_id'];
+        $exchangeId = $context['exchange_id'];
+        $priorAttestationId = $context['attestation_id'];
+        $priorAttestation = SanctumScanIndependentAttestation::query()->findOrFail($priorAttestationId);
+
+        $exchangeStatus = DB::table('sanctum_scan_exchanges')
+            ->where('id', $exchangeId)
+            ->value('status');
+        $disputeStatus = DB::table('sanctum_scan_exchange_disputes')
+            ->where('exchange_id', $exchangeId)
+            ->value('status');
+
+        // The original mandate is closed. A different member must be invited,
+        // accept under their own account, and receive a fresh credential review.
+        $manager->setMandateStatus((int) $originalMandate->getKey(), $adminId, 'completed');
+
+        $successor = $this->makeBuyer('revision-reassessor');
+        $newMembership = $manager->inviteMember(
+            (int) $institution->getKey(),
+            (int) $successor->getKey(),
+            $adminId
+        );
+
+        $this->actingAs($successor, 'api')
+            ->postJson('/api/user/sanctum/verifier/memberships/' . $newMembership->getKey() . '/accept')
+            ->assertOk();
+
+        $manager->recordCredentialReview(
+            (int) $institution->getKey(),
+            (int) $newMembership->getKey(),
+            $adminId,
+            'quality_observation',
+            'professional_inspector',
+            'Kenya Bureau of Standards',
+            'KEBS-REASSESS-011',
+            'KE',
+            null,
+            'issuer_confirmation',
+            'verified',
+            'The second verifier credential was checked for the exact quality observation scope.',
+            now()->addYear()->toDateTimeString()
+        );
+
+        $newMandate = $manager->grantMandate(
+            (int) $evidence->getKey(),
+            (int) $institution->getKey(),
+            $adminId,
+            'quality_observation',
+            'Conduct a fresh reassessment of the prior institutional statement.',
+            now()->addDays(14)->toDateTimeString()
+        );
+
+        $this->actingAs($successor, 'api')
+            ->postJson(
+                '/api/user/sanctum/verifier/memberships/' . $newMembership->getKey()
+                    . '/evidence/' . $evidence->getKey() . '/conflict-declaration',
+                [
+                    'has_conflict' => false,
+                    'disclosure_statement' => 'I have disclosed the relationships and interests known to me for this separate reassessment.',
+                ]
+            )
+            ->assertCreated();
+
+        $reassessmentPath = '/api/user/sanctum/verifier/memberships/' . $newMembership->getKey()
+            . '/attestations/' . $priorAttestationId . '/reassessments';
+
+        // Even the prior issuer cannot use the reassessment path to impersonate
+        // a different member or create a replacement record under their identity.
+        $this->actingAs($verifier, 'api')
+            ->postJson($reassessmentPath, [
+                'verification_method' => 'source_cross_check',
+                'outcome' => 'not_corroborated',
+                'basis_summary' => 'This would be an unauthorized reassessment under the original verifier identity.',
+                'reason_summary' => 'A reassessment must be issued by a different active member of the institution.',
+            ])
+            ->assertForbidden()
+            ->assertJsonPath('error.code', 'reassessment_not_authorized');
+
+        $response = $this->actingAs($successor, 'api')
+            ->postJson($reassessmentPath, [
+                'verification_method' => 'source_cross_check',
+                'outcome' => 'not_corroborated',
+                'basis_summary' => 'The fresh source cross-check did not corroborate the original quality observation.',
+                'reason_summary' => 'A different qualified member completed a new review under a separately issued evidence mandate.',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.reassessment.prior_attestation_id', $priorAttestationId)
+            ->assertJsonPath('data.reassessment.prior_revision_id', null)
+            ->assertJsonPath('data.reassessment.prior_version_number', 1)
+            ->assertJsonPath('data.reassessment.prior_status', 'active')
+            ->assertJsonPath('data.attestation.outcome', 'not_corroborated')
+            ->assertJsonPath('data.attestation.membership_id', $newMembership->getKey());
+
+        $newAttestationId = (int) $response->json('data.attestation.id');
+        $link = SanctumScanAttestationReassessment::query()
+            ->where('reassessment_attestation_id', $newAttestationId)
+            ->firstOrFail();
+
+        $this->assertSame($priorAttestationId, (int) $link->prior_attestation_id);
+        $this->assertSame($newMembership->getKey(), (int) $link->reassessed_by_membership_id);
+        $this->assertSame($successor->getKey(), (int) $link->reassessed_by_user_id);
+        $this->assertSame($evidence->sha256, $link->evidence_sha256);
+        $this->assertNotSame((int) $priorAttestation->verifier_user_id, (int) $link->reassessed_by_user_id);
+
+        // The source attestation remains byte-for-byte attributable to its issuer.
+        $this->assertSame($verifier->getKey(), (int) $priorAttestation->fresh()->verifier_user_id);
+        $this->assertSame('corroborated', $priorAttestation->fresh()->outcome);
+        $this->assertSame('document_review', $priorAttestation->fresh()->verification_method);
+        $this->assertSame($evidence->sha256, $priorAttestation->fresh()->evidence_sha256);
+        $this->assertSame(1, SanctumScanAttestationReassessment::query()
+            ->where('prior_attestation_id', $priorAttestationId)
+            ->count());
+
+        $this->actingAs($buyer, 'api')
+            ->getJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence')
+            ->assertOk()
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.id', $priorAttestationId)
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.reassessments.0.reassessment_attestation_id', $newAttestationId)
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.reassessments.0.prior_version_number', 1)
+            ->assertJsonPath('data.evidence.0.independent_attestations.1.id', $newAttestationId)
+            ->assertJsonPath('data.evidence.0.independent_attestations.1.reassessment_of.prior_attestation_id', $priorAttestationId);
+
+        $this->assertDatabaseHas('sanctum_scan_verifier_registry_events', [
+            'subject_type' => 'attestation_reassessment',
+            'subject_id' => $link->getKey(),
+            'event_type' => 'attestation_reassessed',
+            'actor_guard' => 'api',
+            'actor_id' => $successor->getKey(),
+        ]);
+        $this->assertDatabaseHas('sanctum_scan_exchange_events', [
+            'exchange_id' => $exchangeId,
+            'event_type' => 'external_verifier_attestation_reassessed',
+            'verification_status' => 'external_reassessment_recorded',
+        ]);
+
+        $this->assertSame($exchangeStatus, DB::table('sanctum_scan_exchanges')
+            ->where('id', $exchangeId)
+            ->value('status'));
+        $this->assertSame($disputeStatus, DB::table('sanctum_scan_exchange_disputes')
+            ->where('exchange_id', $exchangeId)
+            ->value('status'));
+
+        $immutable = false;
+        try {
+            $link->update(['reason_summary' => 'Attempted reassessment link mutation.']);
+        } catch (\\LogicException) {
+            $immutable = true;
+        }
+        $this->assertTrue($immutable);
+    }
+
     public function test_issuer_can_withdraw_a_completed_attestation_even_after_conflict_or_evidence_integrity_failure(): void
     {
         $context = $this->makeGovernedAttestationForRevision('revoke');
@@ -1971,6 +2135,7 @@ class EconomicExchangeLifecycleTest extends TestCase
 
     protected function tearDown(): void
     {
+        Schema::dropIfExists('sanctum_scan_attestation_reassessments');
         Schema::dropIfExists('sanctum_scan_attestation_revisions');
         Schema::dropIfExists('sanctum_scan_attestation_appeal_decisions');
         Schema::dropIfExists('sanctum_scan_attestation_appeals');
