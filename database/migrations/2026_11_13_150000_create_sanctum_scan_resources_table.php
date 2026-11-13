@@ -21,6 +21,7 @@ return new class extends Migration
             $table->date('occurred_on')->nullable();
             $table->decimal('quantity', 18, 4)->nullable();
             $table->string('unit', 24)->nullable();
+            $table->unsignedSmallInteger('scan_expires_in_days')->nullable();
             $table->string('status', 16)->default('published');
             $table->timestamp('archived_at')->nullable();
             $table->timestamps();
