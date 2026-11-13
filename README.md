@@ -1150,7 +1150,7 @@ DELETE /merchant-api/merchant/sanctum/resources/{resourceId}
 
 The public scan page is informational. It does not initiate payments, prove ownership, verify product quality, or establish delivery.
 
-See [ADR 0002](docs/architecture/decisions/0002-scan-reference-resolution.md), [ADR 0003](docs/architecture/decisions/0003-merchant-scan-identity.md), and [ADR 0004](docs/architecture/decisions/0004-public-scan-and-resource-registry.md). Read the [merchant economic resource API guide](docs/api/sanctum-scan-resources.md) for request examples and lifecycle behavior. A [PHP syntax lint workflow](.github/workflows/sanctum-scan-php-lint.yml) checks changed PHP files on pull requests.
+See [ADR 0002](docs/architecture/decisions/0002-scan-reference-resolution.md), [ADR 0003](docs/architecture/decisions/0003-merchant-scan-identity.md), and [ADR 0004](docs/architecture/decisions/0004-public-scan-and-resource-registry.md). Read the [merchant economic resource API guide](docs/api/sanctum-scan-resources.md) for request examples and lifecycle behavior. A [PHP lint and feature-test workflow](.github/workflows/sanctum-scan-php-lint.yml) checks changed PHP files and runs the Sanctum Scan lifecycle feature suite on pull requests.
 
 **Milestone 005 — Economic exchange and transaction evidence**
 
