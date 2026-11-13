@@ -1154,7 +1154,7 @@ See [ADR 0002](docs/architecture/decisions/0002-scan-reference-resolution.md), [
 
 **Milestone 005 — Economic exchange and transaction evidence**
 
-- Merchant issues an offer for a published product or agricultural batch to a named active user.
+- Merchant issues an offer for a published product or agricultural batch to a named active, email- and SMS-verified user.
 - Buyer can list, accept or decline only offers addressed to their account.
 - Merchant can dispatch only an accepted offer.
 - Buyer can confirm receipt only after dispatch.
