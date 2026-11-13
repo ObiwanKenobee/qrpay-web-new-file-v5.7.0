@@ -1227,6 +1227,23 @@ See [ADR 0007](docs/architecture/decisions/0007-private-dispute-evidence-and-pla
 
 
 
+**Milestone 008 — Independent verifier registry, mandates and attestations**
+
+- Platform administrators curate an institution registry and can suspend or revoke an institution.
+- Administrators invite existing active user accounts with verified email and phone; the invited account must accept before membership becomes active.
+- An active institution receives a time-limited mandate for one evidence item and one declared verification scope.
+- Only an active member of the mandated institution can privately download the assigned evidence; the evidence SHA-256 is checked before streaming.
+- An authorized verifier can record one immutable attestation per membership and mandate, bound to the exact evidence SHA-256, scope, method, outcome, rationale and timestamp.
+- A buyer on the exchange or the user account that submitted the evidence cannot independently attest to that evidence.
+- Suspending or revoking an institution revokes its active mandates. Administrators can suspend or revoke memberships and revoke or complete mandates.
+- Participant evidence listings show institutional attestations separately from platform-admin reviews.
+- An attestation records an accountable institutional statement. It is not cryptographic proof of verifier identity, legal accreditation, proof of payment settlement, physical delivery or product quality outside the stated scope. It does not automatically adjudicate a dispute.
+- Registry changes and attestations are appended to a verifier registry event log and the associated exchange event timeline.
+
+The admin registry is available under the configured admin route prefix at sanctum/verifiers; mandates are managed under sanctum/evidence/{evidenceId}/mandates. Invited users accept or decline through /api/user/sanctum/verifier/memberships. Authorized evidence access and attestation routes are nested under /api/user/sanctum/verifier/memberships/{membershipId}/evidence/{evidenceId}.
+
+See docs/architecture/decisions/0008-independent-verifier-mandates-and-attestations.md and docs/api/sanctum-scan-independent-verification.md.
+
 **Project:** Atlas Sanctum — Sanctum Scan.
 
 **Initial geographic research context:** Nakuru County, Kenya.
