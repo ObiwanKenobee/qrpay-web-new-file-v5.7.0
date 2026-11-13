@@ -71,6 +71,7 @@ class SanctumScanEvidenceReviewController extends Controller
         $admin = $request->user('admin');
 
         abort_unless($admin, 401);
+        abort_unless($admin->status, 403);
 
         $result = $evidence->review(
             $evidenceId,
