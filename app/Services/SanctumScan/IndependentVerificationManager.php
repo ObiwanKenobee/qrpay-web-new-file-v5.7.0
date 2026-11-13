@@ -4,6 +4,7 @@ namespace App\Services\SanctumScan;
 
 use App\Models\SanctumScanEvidenceVerificationMandate;
 use App\Models\SanctumScanExchangeDisputeEvidence;
+use App\Models\SanctumScanExchange;
 use App\Models\SanctumScanIndependentAttestation;
 use App\Models\SanctumScanVerifierInstitution;
 use App\Models\SanctumScanVerifierMembership;
@@ -774,10 +775,18 @@ class IndependentVerificationManager
                 ->with('evidence.dispute.exchange')
                 ->whereKey($attestationId)
                 ->where('evidence_id', $evidenceId)
+                ->lockForUpdate()
                 ->firstOrFail();
 
             $evidence = $attestation->evidence;
             $exchange = $evidence?->dispute?->exchange;
+
+            if ($exchange) {
+                $exchange = SanctumScanExchange::query()
+                    ->whereKey($exchange->getKey())
+                    ->lockForUpdate()
+                    ->firstOrFail();
+            }
 
             if (! $exchange || (int) $exchange->getKey() !== $exchangeId) {
                 return 'appeal_not_found';
