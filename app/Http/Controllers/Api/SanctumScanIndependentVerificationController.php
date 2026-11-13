@@ -121,6 +121,98 @@ class SanctumScanIndependentVerificationController extends Controller
         ], 201);
     }
 
+    public function correctAttestation(
+        Request $request,
+        int $membershipId,
+        int $attestationId,
+        IndependentVerificationManager $manager
+    ): JsonResponse {
+        $user = $request->user('api');
+        abort_unless($user, 401);
+
+        $validated = $request->validate([
+            'verification_method' => 'required|in:document_review,source_cross_check,site_inspection,direct_confirmation,other',
+            'outcome' => 'required|in:corroborated,not_corroborated,unable_to_assess',
+            'basis_summary' => 'required|string|min:20|max:2000',
+            'reason_code' => 'required|in:factual_error,methodology_error,new_evidence,conflict_discovered,credential_issue,evidence_integrity,other',
+            'reason_summary' => 'required|string|min:20|max:2000',
+        ]);
+
+        $result = $manager->reviseAttestation(
+            $membershipId,
+            $attestationId,
+            (int) $user->getKey(),
+            'corrected',
+            $validated['verification_method'],
+            $validated['outcome'],
+            $validated['basis_summary'],
+            $validated['reason_code'],
+            $validated['reason_summary']
+        );
+
+        if (is_string($result)) {
+            return $this->error($result);
+        }
+
+        return $this->revisionResponse($result);
+    }
+
+    public function revokeAttestation(
+        Request $request,
+        int $membershipId,
+        int $attestationId,
+        IndependentVerificationManager $manager
+    ): JsonResponse {
+        $user = $request->user('api');
+        abort_unless($user, 401);
+
+        $validated = $request->validate([
+            'reason_code' => 'required|in:factual_error,methodology_error,new_evidence,conflict_discovered,credential_issue,evidence_integrity,other',
+            'reason_summary' => 'required|string|min:20|max:2000',
+        ]);
+
+        $result = $manager->reviseAttestation(
+            $membershipId,
+            $attestationId,
+            (int) $user->getKey(),
+            'revoked',
+            null,
+            null,
+            null,
+            $validated['reason_code'],
+            $validated['reason_summary']
+        );
+
+        if (is_string($result)) {
+            return $this->error($result);
+        }
+
+        return $this->revisionResponse($result);
+    }
+
+    private function revisionResponse(\\App\\Models\\SanctumScanAttestationRevision $revision): JsonResponse
+    {
+        return response()->json([
+            'data' => [
+                'revision' => [
+                    'id' => $revision->getKey(),
+                    'attestation_id' => $revision->attestation_id,
+                    'evidence_id' => $revision->evidence_id,
+                    'version_number' => $revision->version_number,
+                    'revision_action' => $revision->revision_action,
+                    'verification_scope' => $revision->verification_scope,
+                    'verification_method' => $revision->verification_method,
+                    'outcome' => $revision->outcome,
+                    'basis_summary' => $revision->basis_summary,
+                    'reason_code' => $revision->reason_code,
+                    'reason_summary' => $revision->reason_summary,
+                    'evidence_sha256' => $revision->evidence_sha256,
+                    'recorded_at' => $revision->recorded_at?->toIso8601String(),
+                ],
+            ],
+        ], 201);
+    }
+
     public function declareConflict(
         Request $request,
         int $membershipId,
@@ -211,6 +303,10 @@ class SanctumScanIndependentVerificationController extends Controller
             'invalid_credential_review' => [422, 'The credential review status or method is not supported.'],
             'invalid_credential_scope' => [422, 'The credential scope is not valid for the selected subject.'],
             'credential_subject_mismatch' => [422, 'The verifier membership does not belong to this institution.'],
+            'invalid_attestation_revision' => [422, 'The revision action or supplied verification fields are not supported.'],
+            'revision_not_authorized' => [403, 'Only the original verifier with the recorded membership can revise this attestation.'],
+            'attestation_evidence_mismatch' => [409, 'The original evidence digest no longer matches the attestation record.'],
+            'attestation_already_revoked' => [409, 'This attestation has already been withdrawn and cannot be revised further.'],
             default => [409, 'The independent verification operation could not be completed.'],
         };
 
