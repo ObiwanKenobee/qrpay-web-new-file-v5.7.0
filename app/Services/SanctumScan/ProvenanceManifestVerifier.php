@@ -259,8 +259,16 @@ final class ProvenanceManifestVerifier
             }
 
             foreach ($attestationMap as $attestationId => $attestation) {
-                foreach (($attestation['reassessments'] ?? []) as $link) {
-                    if (! is_array($link) || ! $this->isPositiveInteger($link['reassessment_attestation_id'] ?? null)) {
+                $reassessmentLinks = $attestation['reassessments'] ?? null;
+                if (! is_array($reassessmentLinks) || ! array_is_list($reassessmentLinks)) {
+                    $errors[] = "Attestation {$attestationId} must contain a reassessments array.";
+                    continue;
+                }
+
+                foreach ($reassessmentLinks as $link) {
+                    if (! is_array($link)
+                        || ! $this->isPositiveInteger($link['id'] ?? null)
+                        || ! $this->isPositiveInteger($link['reassessment_attestation_id'] ?? null)) {
                         $errors[] = "Attestation {$attestationId} contains an invalid reassessment link.";
                         continue;
                     }
@@ -270,9 +278,11 @@ final class ProvenanceManifestVerifier
                     $reverse = is_array($target) ? ($target['reassessment_of'] ?? null) : null;
 
                     if (! is_array($reverse)
+                        || (string) ($reverse['id'] ?? '') !== (string) $link['id']
                         || (string) ($reverse['prior_attestation_id'] ?? '') !== (string) $attestationId
                         || ($reverse['prior_revision_id'] ?? null) !== ($link['prior_revision_id'] ?? null)
-                        || (int) ($reverse['prior_version_number'] ?? 0) !== (int) ($link['prior_version_number'] ?? 0)) {
+                        || (int) ($reverse['prior_version_number'] ?? 0) !== (int) ($link['prior_version_number'] ?? 0)
+                        || ($reverse['prior_status'] ?? null) !== ($link['prior_status'] ?? null)) {
                         $errors[] = "Reassessment link {$link['id']} does not match the target attestation's reverse link.";
                         continue;
                     }
