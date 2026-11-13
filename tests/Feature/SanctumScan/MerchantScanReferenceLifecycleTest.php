@@ -50,6 +50,7 @@ class MerchantScanReferenceLifecycleTest extends TestCase
         // Exclude only the legacy maintenance and conditional KYC middleware.
         // Keep merchant authentication, account status and 2FA in the request path.
         $this->withoutMiddleware([
+            \App\Http\Middleware\Admin\SystemMaintenance::class,
             \App\Http\Middleware\Admin\SystemMaintenanceApi::class,
             \App\Http\Middleware\KycApi::class,
         ]);
