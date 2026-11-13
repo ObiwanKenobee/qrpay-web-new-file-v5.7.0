@@ -1213,7 +1213,7 @@ See [ADR 0006](docs/architecture/decisions/0006-bilateral-dispute-resolution.md)
 - Files are stored on the private `local` filesystem disk under application-generated names; no public storage URL is issued.
 - Evidence metadata stores the detected MIME type, size, submission actor and SHA-256 digest.
 - The same file digest cannot be added to the same dispute more than once.
-- Evidence files and metadata are immutable through their application models.
+- Evidence metadata is immutable through its application model; private file contents are checked against the recorded SHA-256 digest before review or download.
 - Buyer and merchant downloads are participant-scoped and verify the file digest before streaming.
 - Authenticated platform administrators can review pending evidence using the existing admin role-permission and 2FA protections.
 - Review records are immutable, bind to the exact evidence digest and record the reviewer, method, decision and summary.
