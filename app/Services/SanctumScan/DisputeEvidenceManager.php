@@ -31,7 +31,7 @@ class DisputeEvidenceManager
             ->firstOrFail();
 
         return SanctumScanExchangeDisputeEvidence::query()
-            ->with('review')
+            ->with(['review', 'attestations.institution'])
             ->where('dispute_id', $dispute->getKey())
             ->orderBy('id')
             ->get();
@@ -141,7 +141,7 @@ class DisputeEvidenceManager
                     ]
                 );
 
-                return $evidence->fresh(['review']);
+                return $evidence->fresh(['review', 'attestations.institution']);
             });
         } catch (Throwable $exception) {
             if ($storagePath !== null) {
@@ -164,7 +164,7 @@ class DisputeEvidenceManager
             ->firstOrFail();
 
         return SanctumScanExchangeDisputeEvidence::query()
-            ->with('review')
+            ->with(['review', 'attestations.institution'])
             ->where('dispute_id', $dispute->getKey())
             ->whereKey($evidenceId)
             ->firstOrFail();
