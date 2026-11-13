@@ -65,4 +65,10 @@ class SanctumScanIndependentAttestation extends Model
     {
         return $this->hasMany(SanctumScanAttestationAppeal::class, 'attestation_id');
     }
+
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(SanctumScanAttestationRevision::class, 'attestation_id')
+            ->orderBy('version_number');
+    }
 }
