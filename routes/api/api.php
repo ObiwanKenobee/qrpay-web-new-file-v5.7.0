@@ -181,6 +181,17 @@ Route::prefix('user')->group(function(){
             Route::post('sanctum/exchanges/{exchangeId}/dispute/withdraw', [SanctumScanExchangeDisputeController::class, 'withdraw'])
                 ->whereNumber('exchangeId')
                 ->name('api.user.sanctum.exchanges.dispute.withdraw');
+
+            Route::get('sanctum/exchanges/{exchangeId}/dispute/evidence', [SanctumScanDisputeEvidenceController::class, 'index'])
+                ->whereNumber('exchangeId')
+                ->name('api.user.sanctum.exchanges.dispute.evidence.index');
+            Route::post('sanctum/exchanges/{exchangeId}/dispute/evidence', [SanctumScanDisputeEvidenceController::class, 'store'])
+                ->whereNumber('exchangeId')
+                ->name('api.user.sanctum.exchanges.dispute.evidence.store');
+            Route::get('sanctum/exchanges/{exchangeId}/dispute/evidence/{evidenceId}/download', [SanctumScanDisputeEvidenceController::class, 'download'])
+                ->whereNumber('exchangeId')
+                ->whereNumber('evidenceId')
+                ->name('api.user.sanctum.exchanges.dispute.evidence.download');
         });
 
         Route::post('sanctum/exchanges/{exchangeId}/payment-reference', [SanctumScanExchangeController::class, 'submitPaymentReference'])
