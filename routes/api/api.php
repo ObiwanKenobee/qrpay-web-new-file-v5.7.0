@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\User\UserController;
 use App\Http\Controllers\Api\User\SanctumScanExchangeController;
 use App\Http\Controllers\Api\SanctumScanExchangeDisputeController;
 use App\Http\Controllers\Api\SanctumScanDisputeEvidenceController;
+use App\Http\Controllers\Api\SanctumScanIndependentVerificationController;
 use App\Http\Controllers\Api\AppSettingsController;
 use App\Http\Controllers\Api\User\BillPayController;
 use App\Http\Controllers\Api\User\AddMoneyController;
@@ -144,6 +145,30 @@ Route::prefix('user')->group(function(){
         //pusher
 
         Route::middleware(['CheckStatusApiUser','user.google.two.factor.api'])->group(function () {
+        Route::controller(SanctumScanIndependentVerificationController::class)
+            ->prefix('sanctum/verifier')
+            ->name('api.user.sanctum.verifier.')
+            ->group(function () {
+                Route::get('/memberships', 'memberships')->name('memberships');
+                Route::post('/memberships/{membershipId}/accept', 'accept')
+                    ->whereNumber('membershipId')
+                    ->name('memberships.accept')
+                    ->middleware('throttle:10,1');
+                Route::post('/memberships/{membershipId}/decline', 'decline')
+                    ->whereNumber('membershipId')
+                    ->name('memberships.decline')
+                    ->middleware('throttle:10,1');
+                Route::get('/memberships/{membershipId}/evidence/{evidenceId}/download', 'download')
+                    ->whereNumber('membershipId')
+                    ->whereNumber('evidenceId')
+                    ->name('evidence.download');
+                Route::post('/memberships/{membershipId}/evidence/{evidenceId}/attestations', 'attest')
+                    ->whereNumber('membershipId')
+                    ->whereNumber('evidenceId')
+                    ->name('evidence.attest')
+                    ->middleware('throttle:5,1');
+            });
+
         Route::get('sanctum/exchanges', [SanctumScanExchangeController::class, 'index'])
             ->name('api.user.sanctum.exchanges.index')
             ->middleware('throttle:30,1');
