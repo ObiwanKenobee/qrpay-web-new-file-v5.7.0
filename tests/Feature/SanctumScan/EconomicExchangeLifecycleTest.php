@@ -1379,6 +1379,11 @@ class EconomicExchangeLifecycleTest extends TestCase
             now()->addDays(14)->toDateTimeString()
         );
 
+        $this->assertNotSame(
+            (int) $originalMandate->getKey(),
+            (int) $newMandate->getKey()
+        );
+
         $this->actingAs($successor, 'api')
             ->postJson(
                 '/api/user/sanctum/verifier/memberships/' . $newMembership->getKey()
@@ -1472,7 +1477,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         $immutable = false;
         try {
             $link->update(['reason_summary' => 'Attempted reassessment link mutation.']);
-        } catch (\\LogicException) {
+        } catch (\LogicException) {
             $immutable = true;
         }
         $this->assertTrue($immutable);
