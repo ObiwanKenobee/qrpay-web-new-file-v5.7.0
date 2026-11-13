@@ -93,6 +93,20 @@ Route::name('admin.')->group(function () {
     });
 
     Route::middleware(['web', 'auth:admin', 'app.mode', 'admin.role.guard','admin.google.two.factor'])->group(function(){
+        // Private dispute evidence review; access is governed by admin role permissions.
+        Route::controller(SanctumScanEvidenceReviewController::class)
+            ->prefix('sanctum/evidence')
+            ->name('sanctum.evidence.')
+            ->group(function () {
+                Route::get('/', 'index')->name('index');
+                Route::get('/{evidenceId}/download', 'download')
+                    ->whereNumber('evidenceId')
+                    ->name('download');
+                Route::post('/{evidenceId}/review', 'review')
+                    ->whereNumber('evidenceId')
+                    ->name('review');
+            });
+
         // Dashboard Section
         Route::controller(DashboardController::class)->group(function () {
             Route::get('dashboard', 'index')->name('dashboard');
