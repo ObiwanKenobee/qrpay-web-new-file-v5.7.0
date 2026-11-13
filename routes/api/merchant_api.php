@@ -182,6 +182,12 @@ Route::prefix('merchant')->group(function(){
                     ->whereNumber('exchangeId')
                     ->whereNumber('evidenceId')
                     ->name('sanctum.exchanges.dispute.evidence.download');
+                Route::post('sanctum/exchanges/{exchangeId}/dispute/evidence/{evidenceId}/attestations/{attestationId}/appeals', [SanctumScanDisputeEvidenceController::class, 'appealAttestation'])
+                    ->whereNumber('exchangeId')
+                    ->whereNumber('evidenceId')
+                    ->whereNumber('attestationId')
+                    ->name('sanctum.exchanges.dispute.evidence.attestations.appeals')
+                    ->middleware('throttle:5,1');
             });
             Route::get('dashboard', [UserController::class,'home']);
             Route::post('verify/pin', [UserController::class,'pinVerify'])->middleware(['merchant.pin.setup.guard']);
