@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\SanctumScanVerifierMembership;
+use App\Models\SanctumScanAttestationRevision;
 use App\Services\SanctumScan\IndependentVerificationManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -190,7 +191,7 @@ class SanctumScanIndependentVerificationController extends Controller
         return $this->revisionResponse($result);
     }
 
-    private function revisionResponse(\\App\\Models\\SanctumScanAttestationRevision $revision): JsonResponse
+    private function revisionResponse(SanctumScanAttestationRevision $revision): JsonResponse
     {
         return response()->json([
             'data' => [
