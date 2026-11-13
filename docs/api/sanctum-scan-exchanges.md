@@ -33,7 +33,7 @@ Example:
 }
 \`\`\`
 
-The resource must be published and owned by the authenticated merchant. The buyer must be an existing active user account. The unit must match the registered resource unit when one is configured.
+The resource must be published and owned by the authenticated merchant. The buyer must be an existing active user account with email and SMS verification completed. The unit must match the registered resource unit when one is configured.
 
 The \`amount\` is the total agreed amount for the specified quantity, not a per-unit price. Currency is a three-letter uppercase code. The default offer lifetime is 72 hours; the optional lifetime must be 1–168 hours.
 
