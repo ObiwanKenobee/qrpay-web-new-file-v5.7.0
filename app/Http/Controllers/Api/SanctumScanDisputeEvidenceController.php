@@ -124,9 +124,11 @@ class SanctumScanDisputeEvidenceController extends Controller
 
     private function actor(Request $request): array
     {
-        $merchant = $request->user('merchant_api');
+        if ($request->is('merchant-api/merchant/*')) {
+            $merchant = $request->user('merchant_api');
 
-        if ($merchant) {
+            abort_unless($merchant, 401);
+
             return ['merchant_api', (int) $merchant->getKey()];
         }
 
