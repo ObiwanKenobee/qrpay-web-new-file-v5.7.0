@@ -1619,6 +1619,11 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->assertTrue(SanctumScanVerifierRegistryEvent::query()
             ->where('event_type', 'attestation_appeal_decided')
             ->exists());
+
+        $this->actingAs($buyer, 'api')
+            ->getJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence')
+            ->assertOk()
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.appeals.0.decision.outcome', 'correction_recommended');
     }
 
     public function test_suspending_an_institution_revokes_its_active_evidence_mandates(): void
