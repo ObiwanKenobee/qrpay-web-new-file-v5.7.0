@@ -53,6 +53,9 @@ jobs:
           DB_DATABASE: ':memory:'
         run: composer install --prefer-dist --no-interaction --no-progress
 
+      - name: Prepare application environment
+        run: cp .env.example .env
+
       - name: Prepare application key
         run: php artisan key:generate --force
 
