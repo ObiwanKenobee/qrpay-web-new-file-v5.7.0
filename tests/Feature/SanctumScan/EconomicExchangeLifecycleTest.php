@@ -16,6 +16,9 @@ use Illuminate\Support\Facades\Schema;
 use App\Models\SanctumScanExchangeDisputeEvidence;
 use App\Models\SanctumScanExchangeEvidenceReview;
 use App\Services\SanctumScan\DisputeEvidenceManager;
+use App\Services\SanctumScan\IndependentVerificationManager;
+use App\Models\SanctumScanIndependentAttestation;
+use App\Models\SanctumScanVerifierRegistryEvent;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -96,6 +99,17 @@ class EconomicExchangeLifecycleTest extends TestCase
         $evidenceMigration->up();
         $evidenceReviewMigration = require base_path('database/migrations/2026_11_13_166000_create_sanctum_scan_exchange_evidence_reviews_table.php');
         $evidenceReviewMigration->up();
+
+        $verifierInstitutionMigration = require base_path('database/migrations/2026_11_13_167000_create_sanctum_scan_verifier_institutions_table.php');
+        $verifierInstitutionMigration->up();
+        $verifierMembershipMigration = require base_path('database/migrations/2026_11_13_168000_create_sanctum_scan_verifier_memberships_table.php');
+        $verifierMembershipMigration->up();
+        $verificationMandateMigration = require base_path('database/migrations/2026_11_13_169000_create_sanctum_scan_evidence_verification_mandates_table.php');
+        $verificationMandateMigration->up();
+        $attestationMigration = require base_path('database/migrations/2026_11_13_170000_create_sanctum_scan_independent_attestations_table.php');
+        $attestationMigration->up();
+        $verifierEventMigration = require base_path('database/migrations/2026_11_13_171000_create_sanctum_scan_verifier_registry_events_table.php');
+        $verifierEventMigration->up();
 
         // Keep Passport authentication, participant status and 2FA checks active.
         // Disable only environment-dependent maintenance, PIN and global KYC gates.
@@ -1029,8 +1043,279 @@ class EconomicExchangeLifecycleTest extends TestCase
             ->assertJsonPath('error.code', 'evidence_integrity_failure');
     }
 
+    private function makeAdminForVerification(string $suffix): int
+    {
+        return (int) DB::table('admins')->insertGetId([
+            'firstname' => 'Registry',
+            'lastname' => 'Administrator',
+            'username' => 'registry-admin-' . $suffix,
+            'email' => 'registry-admin-' . $suffix . '@example.test',
+            'password' => bcrypt('not-a-real-password'),
+            'status' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function makeDisputeEvidenceForVerification(
+        Merchant $merchant,
+        User $buyer,
+        string $suffix
+    ): array {
+        $resource = $this->makeResource($merchant, 'Verification batch ' . $suffix);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+        $exchangeId = $offer['id'];
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->assertOk();
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute', [
+                'category' => 'quality_concern',
+                'statement' => 'This evidence needs an independent inspection for the test fixture.',
+            ])
+            ->assertCreated();
+
+        $this->actingAs($buyer, 'api')
+            ->post('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence', [
+                'evidence_type' => 'quality_record',
+                'file' => UploadedFile::fake()->createWithContent(
+                    'quality-proof-' . $suffix . '.pdf',
+                    '%PDF-1.4 independent verification fixture'
+                ),
+            ], ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        return [
+            'exchange_id' => $exchangeId,
+            'evidence' => SanctumScanExchangeDisputeEvidence::query()->latest('id')->firstOrFail(),
+        ];
+    }
+
+    public function test_independent_verifier_requires_user_acceptance_and_an_evidence_specific_mandate(): void
+    {
+        Storage::fake('local');
+
+        $merchant = $this->makeMerchant('independent-verify-seller', 'Independent Verify Seller');
+        $buyer = $this->makeBuyer('independent-verify-buyer');
+        $verifier = $this->makeBuyer('independent-quality-verifier');
+        $outsider = $this->makeBuyer('independent-outsider');
+        $fixture = $this->makeDisputeEvidenceForVerification($merchant, $buyer, 'm8');
+        $evidence = $fixture['evidence'];
+        $adminId = $this->makeAdminForVerification('m8');
+        $manager = app(IndependentVerificationManager::class);
+
+        $institution = $manager->registerInstitution($adminId, [
+            'name' => 'Nakuru Independent Quality Institute',
+            'organization_type' => 'inspection_body',
+            'country_code' => 'ke',
+            'registration_reference' => 'KE-INSPECT-008',
+            'website' => 'https://example.test/quality-institute',
+        ]);
+        $membership = $manager->inviteMember(
+            (int) $institution->getKey(),
+            (int) $verifier->getKey(),
+            $adminId
+        );
+        $this->assertInstanceOf(\App\Models\SanctumScanVerifierMembership::class, $membership);
+        $this->assertSame('invited', $membership->status);
+
+        $this->assertSame(
+            'invitation_requires_user_acceptance',
+            $manager->setMembershipStatus((int) $membership->getKey(), $adminId, 'active')
+        );
+
+        $this->actingAs($outsider, 'api')
+            ->postJson('/api/user/sanctum/verifier/memberships/' . $membership->getKey() . '/accept')
+            ->assertNotFound();
+
+        $this->actingAs($verifier, 'api')
+            ->getJson('/api/user/sanctum/verifier/memberships')
+            ->assertOk()
+            ->assertJsonPath('data.memberships.0.status', 'invited');
+
+        $this->actingAs($verifier, 'api')
+            ->postJson('/api/user/sanctum/verifier/memberships/' . $membership->getKey() . '/accept')
+            ->assertOk()
+            ->assertJsonPath('data.membership.status', 'active');
+
+        $downloadUrl = '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
+            . '/evidence/' . $evidence->getKey() . '/download';
+
+        $this->actingAs($verifier, 'api')->get($downloadUrl)->assertForbidden();
+
+        $mandate = $manager->grantMandate(
+            (int) $evidence->getKey(),
+            (int) $institution->getKey(),
+            $adminId,
+            'quality_observation',
+            'Inspect the submitted quality record against the stated scope.',
+            now()->addDays(7)->toDateTimeString()
+        );
+        $this->assertInstanceOf(
+            \App\Models\SanctumScanEvidenceVerificationMandate::class,
+            $mandate
+        );
+
+        $this->actingAs($verifier, 'api')
+            ->get($downloadUrl)
+            ->assertDownload('quality-proof-m8.pdf');
+
+        $attestationUrl = '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
+            . '/evidence/' . $evidence->getKey() . '/attestations';
+
+        $this->actingAs($verifier, 'api')
+            ->postJson($attestationUrl, [
+                'verification_scope' => 'document_authenticity',
+                'verification_method' => 'site_inspection',
+                'outcome' => 'corroborated',
+                'basis_summary' => 'The inspected quality record was corroborated against the documented observation criteria.',
+            ])
+            ->assertStatus(403)
+            ->assertJsonPath('error.code', 'verification_not_authorized');
+
+        $this->actingAs($verifier, 'api')
+            ->postJson($attestationUrl, [
+                'verification_scope' => 'quality_observation',
+                'verification_method' => 'site_inspection',
+                'outcome' => 'corroborated',
+                'basis_summary' => 'The inspected quality record was corroborated against the documented observation criteria.',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.attestation.evidence_sha256', $evidence->sha256)
+            ->assertJsonPath('data.attestation.outcome', 'corroborated');
+
+        $attestation = SanctumScanIndependentAttestation::query()->firstOrFail();
+        $this->assertSame($evidence->sha256, $attestation->evidence_sha256);
+        $this->assertSame($verifier->getKey(), $attestation->verifier_user_id);
+        $this->assertSame(0, SanctumScanExchangeEvidenceReview::query()->count());
+        $this->assertSame('accepted', SanctumScanExchange::query()->findOrFail($fixture['exchange_id'])->status);
+        $this->assertSame('open', SanctumScanExchangeDispute::query()->firstOrFail()->status);
+
+        $this->actingAs($buyer, 'api')
+            ->getJson('/api/user/sanctum/exchanges/' . $fixture['exchange_id'] . '/dispute/evidence')
+            ->assertOk()
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.outcome', 'corroborated')
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.institution_name', 'Nakuru Independent Quality Institute');
+
+        $this->assertTrue(SanctumScanVerifierRegistryEvent::query()->where('event_type', 'attestation_recorded')->exists());
+        $this->assertTrue(SanctumScanExchangeEvent::query()->where('event_type', 'external_verifier_attestation_recorded')->exists());
+
+        try {
+            $attestation->update(['outcome' => 'not_corroborated']);
+            $this->fail('Independent attestations should be immutable.');
+        } catch (\LogicException $exception) {
+            $this->assertSame('Independent verifier attestations are immutable.', $exception->getMessage());
+        }
+    }
+
+    public function test_a_dispute_participant_cannot_attest_to_their_own_evidence_as_an_independent_verifier(): void
+    {
+        Storage::fake('local');
+
+        $merchant = $this->makeMerchant('conflict-verify-seller', 'Conflict Verify Seller');
+        $buyer = $this->makeBuyer('conflict-verify-buyer');
+        $fixture = $this->makeDisputeEvidenceForVerification($merchant, $buyer, 'conflict');
+        $adminId = $this->makeAdminForVerification('conflict');
+        $manager = app(IndependentVerificationManager::class);
+
+        $institution = $manager->registerInstitution($adminId, [
+            'name' => 'Conflict Test Inspection Body',
+            'organization_type' => 'inspection_body',
+            'country_code' => 'KE',
+        ]);
+        $membership = $manager->inviteMember(
+            (int) $institution->getKey(),
+            (int) $buyer->getKey(),
+            $adminId
+        );
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/verifier/memberships/' . $membership->getKey() . '/accept')
+            ->assertOk();
+
+        $manager->grantMandate(
+            (int) $fixture['evidence']->getKey(),
+            (int) $institution->getKey(),
+            $adminId,
+            'quality_observation',
+            'This mandate is intentionally used to test a conflict restriction.',
+            now()->addDays(7)->toDateTimeString()
+        );
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/verifier/memberships/' . $membership->getKey()
+                . '/evidence/' . $fixture['evidence']->getKey() . '/attestations', [
+                    'verification_scope' => 'quality_observation',
+                    'verification_method' => 'document_review',
+                    'outcome' => 'corroborated',
+                    'basis_summary' => 'A participant must not certify their own disputed exchange evidence.',
+                ])
+            ->assertStatus(409)
+            ->assertJsonPath('error.code', 'verifier_conflict_of_interest');
+
+        $this->assertSame(0, SanctumScanIndependentAttestation::query()->count());
+    }
+
+    public function test_suspending_an_institution_revokes_its_active_evidence_mandates(): void
+    {
+        Storage::fake('local');
+
+        $merchant = $this->makeMerchant('suspend-verify-seller', 'Suspend Verify Seller');
+        $buyer = $this->makeBuyer('suspend-verify-buyer');
+        $verifier = $this->makeBuyer('suspend-quality-verifier');
+        $fixture = $this->makeDisputeEvidenceForVerification($merchant, $buyer, 'suspend');
+        $adminId = $this->makeAdminForVerification('suspend');
+        $manager = app(IndependentVerificationManager::class);
+
+        $institution = $manager->registerInstitution($adminId, [
+            'name' => 'Suspension Test Institute',
+            'organization_type' => 'research_institute',
+            'country_code' => 'KE',
+        ]);
+        $membership = $manager->inviteMember(
+            (int) $institution->getKey(),
+            (int) $verifier->getKey(),
+            $adminId
+        );
+
+        $this->actingAs($verifier, 'api')
+            ->postJson('/api/user/sanctum/verifier/memberships/' . $membership->getKey() . '/accept')
+            ->assertOk();
+
+        $mandate = $manager->grantMandate(
+            (int) $fixture['evidence']->getKey(),
+            (int) $institution->getKey(),
+            $adminId,
+            'quality_observation',
+            'Inspect the evidence within the limited quality observation scope.',
+            now()->addDays(7)->toDateTimeString()
+        );
+        $this->assertInstanceOf(
+            \App\Models\SanctumScanEvidenceVerificationMandate::class,
+            $mandate
+        );
+
+        $manager->setInstitutionStatus((int) $institution->getKey(), $adminId, 'suspended');
+
+        $this->assertSame('revoked', $mandate->fresh()->status);
+
+        $this->actingAs($verifier, 'api')
+            ->get('/api/user/sanctum/verifier/memberships/' . $membership->getKey()
+                . '/evidence/' . $fixture['evidence']->getKey() . '/download')
+            ->assertForbidden();
+
+        $this->assertSame(0, SanctumScanIndependentAttestation::query()->count());
+    }
+
     protected function tearDown(): void
     {
+        Schema::dropIfExists('sanctum_scan_verifier_registry_events');
+        Schema::dropIfExists('sanctum_scan_independent_attestations');
+        Schema::dropIfExists('sanctum_scan_evidence_verification_mandates');
+        Schema::dropIfExists('sanctum_scan_verifier_memberships');
+        Schema::dropIfExists('sanctum_scan_verifier_institutions');
         Schema::dropIfExists('sanctum_scan_exchange_evidence_reviews');
         Schema::dropIfExists('sanctum_scan_exchange_dispute_evidence');
         Schema::dropIfExists('sanctum_scan_exchange_dispute_messages');
