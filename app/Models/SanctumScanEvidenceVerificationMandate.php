@@ -35,4 +35,9 @@ class SanctumScanEvidenceVerificationMandate extends Model
     {
         return $this->hasMany(SanctumScanIndependentAttestation::class, 'mandate_id');
     }
+
+    public function conflictDeclarations(): HasMany
+    {
+        return $this->hasMany(SanctumScanVerifierConflictDeclaration::class, 'mandate_id');
+    }
 }
