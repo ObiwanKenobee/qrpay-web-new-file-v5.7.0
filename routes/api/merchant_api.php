@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Merchant\PaymentLinkController;
 use App\Http\Controllers\Api\Merchant\UserController;
 use App\Http\Controllers\Api\Merchant\ReceiveMoneyController;
 use App\Http\Controllers\Api\Merchant\SecurityController;
+use App\Http\Controllers\Api\Merchant\SanctumScanReferenceController;
 use App\Http\Controllers\Api\Merchant\SetupPinController;
 use App\Http\Controllers\Api\Merchant\TransactionController;
 use App\Http\Helpers\Api\Helpers;
@@ -101,6 +102,17 @@ Route::prefix('merchant')->group(function(){
          Route::get('pusher/beams-auth',[AuthorizationController::class,'pusherBeamsAuth'])->withoutMiddleware(['api','merchant.api']);
         //pusher
         Route::middleware(['CheckStatusApiMerchant','merchant.google.two.factor.api'])->group(function () {
+            Route::controller(SanctumScanReferenceController::class)
+                ->prefix('sanctum/scan-references')
+                ->name('sanctum.scan.references.')
+                ->middleware('throttle:10,1')
+                ->group(function () {
+                    Route::get('/', 'index')->name('index');
+                    Route::post('/', 'store')->name('store')->middleware('api.kyc');
+                    Route::delete('/{referenceId}', 'destroy')
+                        ->whereNumber('referenceId')
+                        ->name('destroy');
+                });
             Route::get('dashboard', [UserController::class,'home']);
             Route::post('verify/pin', [UserController::class,'pinVerify'])->middleware(['merchant.pin.setup.guard']);
             Route::get('get-remaining', [UserController::class,'getRemainingBalance']);
