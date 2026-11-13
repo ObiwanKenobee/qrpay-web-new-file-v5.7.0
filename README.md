@@ -1244,6 +1244,17 @@ The admin registry is available under the configured admin route prefix at sanct
 
 See docs/architecture/decisions/0008-independent-verifier-mandates-and-attestations.md and docs/api/sanctum-scan-independent-verification.md.
 
+**Milestone 009 — Verifier credentials, conflict declarations and attestation appeals**
+
+- Platform administrators record append-only checks of institution registration references and individual verifier credentials. A current, latest `verified` review is required for the institution and the mandate's exact verifier scope before evidence access or attestation.
+- Credential checks retain issuer, reference, jurisdiction, source URL, review method, reviewer, result, summary and optional expiry. A later rejected, unable-to-verify or expired record removes the authority supplied by an older verification.
+- Before viewing or attesting to mandated evidence, the authenticated verifier must submit an immutable conflict-of-interest declaration for that membership and mandate. A disclosed conflict blocks further evidence access and attestation.
+- A buyer or merchant on the exchange can lodge one appeal per attestation. The appeal snapshots the evidence digest and is immutable.
+- A separate platform administrator records one immutable process decision per appeal. The original institutional attestation is never rewritten; the appeal outcome does not change the exchange, dispute, wallet, payment or settlement state.
+- Credential reviews, conflict declarations, appeals and decisions are appended to the verifier registry event log; appeals and process decisions are also appended to the exchange event timeline. Participants can see appeal decisions alongside the unchanged attestation.
+
+See [ADR 0009](docs/architecture/decisions/0009-verifier-credentials-conflicts-and-appeals.md) and [the governance API guide](docs/api/sanctum-scan-verifier-governance.md).
+
 **Project:** Atlas Sanctum — Sanctum Scan.
 
 **Initial geographic research context:** Nakuru County, Kenya.
