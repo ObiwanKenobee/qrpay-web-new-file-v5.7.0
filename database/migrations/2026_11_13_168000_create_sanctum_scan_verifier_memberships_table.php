@@ -18,17 +18,17 @@ return new class extends Migration
             $table->timestamp('accepted_at')->nullable();
             $table->timestamps();
 
-            $table->foreign('institution_id')
+            $table->foreign('institution_id', 'sanctum_scan_member_institution_fk')
                 ->references('id')
                 ->on('sanctum_scan_verifier_institutions')
                 ->onDelete('restrict');
 
-            $table->foreign('user_id')
+            $table->foreign('user_id', 'sanctum_scan_member_user_fk')
                 ->references('id')
                 ->on('users')
                 ->onDelete('restrict');
 
-            $table->foreign('invited_by_admin_id')
+            $table->foreign('invited_by_admin_id', 'sanctum_scan_member_inviter_fk')
                 ->references('id')
                 ->on('admins')
                 ->onDelete('restrict');
