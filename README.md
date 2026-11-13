@@ -1110,6 +1110,21 @@ Contributors should consult the repository's contribution guidelines, security p
 
 **Stage:** Research, architecture and early development.
 
+### Implemented protocol slice
+
+The first read-only Sanctum Scan resolver is available at:
+
+\`\`\`http
+GET /api/sanctum/v1/scan/{reference}
+\`\`\`
+
+References use a high-entropy opaque token. The database stores only its SHA-256 hash. Resolution returns a small public resource description and does not expose internal resource IDs, authenticate the scanner, authorize a transaction or confirm payment settlement.
+
+The initial internal issuer supports merchant, product, asset, agreement, payment-request, community-project and service references. References can be revoked and can optionally expire. The resolver applies an endpoint-specific rate limit and returns the same public not-found response for malformed, unknown, expired and revoked references.
+
+See [ADR 0002](docs/architecture/decisions/0002-scan-reference-resolution.md). The endpoint is a protocol foundation, not yet a complete QR-generation or merchant-onboarding workflow.
+
+
 **Project:** Atlas Sanctum — Sanctum Scan.
 
 **Initial geographic research context:** Nakuru County, Kenya.
