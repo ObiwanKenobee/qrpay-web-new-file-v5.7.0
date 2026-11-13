@@ -167,6 +167,16 @@ Route::prefix('user')->group(function(){
                     ->whereNumber('evidenceId')
                     ->name('evidence.conflict-declaration')
                     ->middleware('throttle:5,1');
+                Route::post('/memberships/{membershipId}/attestations/{attestationId}/corrections', 'correctAttestation')
+                    ->whereNumber('membershipId')
+                    ->whereNumber('attestationId')
+                    ->name('attestations.correct')
+                    ->middleware('throttle:5,1');
+                Route::post('/memberships/{membershipId}/attestations/{attestationId}/revocation', 'revokeAttestation')
+                    ->whereNumber('membershipId')
+                    ->whereNumber('attestationId')
+                    ->name('attestations.revoke')
+                    ->middleware('throttle:5,1');
                 Route::post('/memberships/{membershipId}/evidence/{evidenceId}/attestations', 'attest')
                     ->whereNumber('membershipId')
                     ->whereNumber('evidenceId')
