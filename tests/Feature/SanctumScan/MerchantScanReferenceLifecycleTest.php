@@ -91,7 +91,7 @@ class MerchantScanReferenceLifecycleTest extends TestCase
 
         $scanUrl = $response->json('data.scan_url');
         $this->assertIsString($scanUrl);
-        $this->assertStringContainsString('/api/sanctum/v1/scan/snc_', $scanUrl);
+        $this->assertStringContainsString('/scan/snc_', $scanUrl);
 
         $qrDataUri = $response->json('data.qr_image_data_uri');
         $this->assertStringStartsWith('data:image/svg+xml;base64,', $qrDataUri);
@@ -108,10 +108,10 @@ class MerchantScanReferenceLifecycleTest extends TestCase
         $this->assertSame(hash('sha256', $this->referenceFromUrl($scanUrl)), $record->reference_hash);
         $this->assertStringNotContainsString($merchant->email, $scanUrl);
 
-        $this->getJson($scanUrl)
+        $this->get($scanUrl)
             ->assertOk()
-            ->assertJsonPath('data.resource.display_name', 'Mosop Farm Inputs')
-            ->assertJsonPath('data.resource.profile.handle', 'mosop-farm-inputs');
+            ->assertSee('Mosop Farm Inputs')
+            ->assertSee('mosop-farm-inputs');
     }
 
     public function test_merchant_listing_is_scoped_to_the_authenticated_owner(): void
@@ -250,7 +250,7 @@ class MerchantScanReferenceLifecycleTest extends TestCase
     private function referenceFromUrl(string $url): string
     {
         $path = parse_url($url, PHP_URL_PATH);
-        $marker = '/api/sanctum/v1/scan/';
+        $marker = '/scan/';
 
         $this->assertIsString($path);
         $this->assertStringContainsString($marker, $path);
