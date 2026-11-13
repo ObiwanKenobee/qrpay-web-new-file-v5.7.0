@@ -14,7 +14,7 @@ The first new protocol slice must not move funds or expose internal database ide
 
 Introduce a versioned Sanctum Scan reference with these properties:
 
-- Reference format: \`snc_\` followed by 32 cryptographically random bytes encoded as unpadded base64url.
+- Reference format: `snc_` followed by 32 cryptographically random bytes encoded as unpadded base64url.
 - Persist only the SHA-256 hash of the full reference.
 - Bind a reference to an allowlisted resource type and an internal resource ID.
 - Store intentionally public display metadata separately from private resource data.
@@ -26,11 +26,11 @@ Introduce a versioned Sanctum Scan reference with these properties:
 
 ## Endpoint
 
-\`GET /api/sanctum/v1/scan/{reference}\`
+`GET /api/sanctum/v1/scan/{reference}`
 
 Successful response:
 
-\`\`\`json
+```json
 {
   "schema_version": "1.0",
   "type": "scan_resolution",
@@ -43,18 +43,18 @@ Successful response:
     "expires_at": null
   }
 }
-\`\`\`
+```
 
 Unavailable response:
 
-\`\`\`json
+```json
 {
   "error": {
     "code": "scan_reference_unavailable",
     "message": "This scan reference is invalid, expired, or unavailable."
   }
 }
-\`\`\`
+```
 
 ## Issuance and revocation
 
