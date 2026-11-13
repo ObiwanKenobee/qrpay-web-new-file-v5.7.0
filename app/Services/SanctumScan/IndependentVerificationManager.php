@@ -285,7 +285,7 @@ class IndependentVerificationManager
             return 'invalid_verification_scope';
         }
 
-        if (\\Illuminate\\Support\\Carbon::parse($expiresAt)->isPast()) {
+        if (\Illuminate\Support\Carbon::parse($expiresAt)->isPast()) {
             return 'mandate_expiry_invalid';
         }
 
