@@ -34,10 +34,10 @@ class ScanReferenceResolutionTest extends TestCase
     public function test_it_resolves_an_active_reference_to_public_metadata_only(): void
     {
         $issued = app(ScanReferenceIssuer::class)->issue(
-            'product',
+            'service',
             845,
-            'Potato batch 24',
-            'Agricultural produce batch.'
+            'Public service',
+            'A general public service reference.'
         );
 
         $response = $this->getJson('/api/sanctum/v1/scan/' . $issued['reference']);
@@ -45,9 +45,9 @@ class ScanReferenceResolutionTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('schema_version', '1.0')
             ->assertJsonPath('type', 'scan_resolution')
-            ->assertJsonPath('data.resource.type', 'product')
-            ->assertJsonPath('data.resource.display_name', 'Potato batch 24')
-            ->assertJsonPath('data.resource.description', 'Agricultural produce batch.')
+            ->assertJsonPath('data.resource.type', 'service')
+            ->assertJsonPath('data.resource.display_name', 'Public service')
+            ->assertJsonPath('data.resource.description', 'A general public service reference.')
             ->assertJsonPath('data.expires_at', null);
 
         $this->assertArrayNotHasKey('id', $response->json('data.resource'));
@@ -57,7 +57,7 @@ class ScanReferenceResolutionTest extends TestCase
 
     public function test_it_stores_only_a_hash_of_the_plaintext_reference(): void
     {
-        $issued = app(ScanReferenceIssuer::class)->issue('product', 123, 'Potato batch');
+        $issued = app(ScanReferenceIssuer::class)->issue('service', 123, 'Public service');
 
         $this->assertSame(
             hash('sha256', $issued['reference']),
