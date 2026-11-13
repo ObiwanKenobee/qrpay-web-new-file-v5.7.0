@@ -1217,6 +1217,170 @@ class EconomicExchangeLifecycleTest extends TestCase
         ];
     }
 
+    public function test_verifier_corrections_append_versions_without_mutating_the_original_attestation(): void
+    {
+        $context = $this->makeGovernedAttestationForRevision('correct');
+        $manager = $context['manager'];
+        $verifier = $context['verifier'];
+        $buyer = $context['buyer'];
+        $membership = $context['membership'];
+        $mandate = $context['mandate'];
+        $evidence = $context['evidence'];
+        $attestationId = $context['attestation_id'];
+        $adminId = $context['admin_id'];
+        $exchangeId = $context['exchange_id'];
+        $attestation = SanctumScanIndependentAttestation::query()->findOrFail($attestationId);
+
+        // A completed mandate still permits a scoped correction by its original,
+        // currently credentialed and conflict-cleared verifier.
+        $manager->setMandateStatus((int) $mandate->getKey(), $adminId, 'completed');
+
+        $correctionPath = '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
+            . '/attestations/' . $attestationId . '/corrections';
+
+        $this->actingAs($buyer, 'api')
+            ->postJson($correctionPath, [
+                'verification_method' => 'source_cross_check',
+                'outcome' => 'not_corroborated',
+                'basis_summary' => 'The additional registry cross-check did not corroborate the original quality observation.',
+                'reason_code' => 'new_evidence',
+                'reason_summary' => 'A source record received after the original review materially changes the verification conclusion.',
+            ])
+            ->assertForbidden()
+            ->assertJsonPath('error.code', 'revision_not_authorized');
+
+        $correction = $this->actingAs($verifier, 'api')
+            ->postJson($correctionPath, [
+                'verification_method' => 'source_cross_check',
+                'outcome' => 'not_corroborated',
+                'basis_summary' => 'The additional registry cross-check did not corroborate the original quality observation.',
+                'reason_code' => 'new_evidence',
+                'reason_summary' => 'A source record received after the original review materially changes the verification conclusion.',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.revision.version_number', 2)
+            ->assertJsonPath('data.revision.revision_action', 'corrected')
+            ->assertJsonPath('data.revision.evidence_sha256', $evidence->sha256);
+
+        $revisionId = (int) $correction->json('data.revision.id');
+        $revision = SanctumScanAttestationRevision::query()->findOrFail($revisionId);
+
+        $this->assertSame('corroborated', $attestation->fresh()->outcome);
+        $this->assertSame('document_review', $attestation->fresh()->verification_method);
+        $this->assertSame($evidence->sha256, $attestation->fresh()->evidence_sha256);
+        $this->assertSame(2, SanctumScanAttestationRevision::query()
+            ->where('attestation_id', $attestationId)
+            ->count());
+
+        $this->actingAs($buyer, 'api')
+            ->getJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence')
+            ->assertOk()
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.outcome', 'corroborated')
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.current.version_number', 2)
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.current.outcome', 'not_corroborated')
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.current.status', 'active')
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.revisions.0.id', $revisionId);
+
+        try {
+            $revision->update(['outcome' => 'corroborated']);
+            $this->fail('Attestation revisions must be immutable.');
+        } catch (\LogicException $exception) {
+            $this->assertSame('Independent attestation revisions are immutable.', $exception->getMessage());
+        }
+
+        $this->assertSame('accepted', SanctumScanExchange::query()->findOrFail($exchangeId)->status);
+        $this->assertSame('open', SanctumScanExchangeDispute::query()->firstOrFail()->status);
+        $this->assertTrue(SanctumScanVerifierRegistryEvent::query()
+            ->where('event_type', 'attestation_corrected')
+            ->exists());
+        $this->assertTrue(SanctumScanExchangeEvent::query()
+            ->where('event_type', 'external_verifier_attestation_corrected')
+            ->exists());
+    }
+
+    public function test_issuer_can_withdraw_a_completed_attestation_even_after_conflict_or_evidence_integrity_failure(): void
+    {
+        $context = $this->makeGovernedAttestationForRevision('revoke');
+        $manager = $context['manager'];
+        $verifier = $context['verifier'];
+        $buyer = $context['buyer'];
+        $membership = $context['membership'];
+        $mandate = $context['mandate'];
+        $evidence = $context['evidence'];
+        $attestationId = $context['attestation_id'];
+        $exchangeId = $context['exchange_id'];
+        $attestation = SanctumScanIndependentAttestation::query()->findOrFail($attestationId);
+
+        // Disclosing a newly discovered conflict blocks further corrections,
+        // but must not trap the issuer into leaving an unreliable attestation live.
+        $this->actingAs($verifier, 'api')
+            ->postJson(
+                '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
+                    . '/evidence/' . $evidence->getKey() . '/conflict-declaration',
+                [
+                    'has_conflict' => true,
+                    'disclosure_statement' => 'I have discovered and disclosed a material relationship that conflicts with this review.',
+                ]
+            )
+            ->assertCreated()
+            ->assertJsonPath('data.conflict_declaration.has_conflict', true);
+
+        $manager->setMandateStatus((int) $mandate->getKey(), $context['admin_id'], 'completed');
+
+        // Simulate lost or tampered storage. Withdrawal is still permitted because
+        // it is a protective action that does not require re-reading the file.
+        Storage::disk('local')->put($evidence->storage_path, 'tampered after the attestation');
+
+        $revocationPath = '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
+            . '/attestations/' . $attestationId . '/revocation';
+
+        $revocation = $this->actingAs($verifier, 'api')
+            ->postJson($revocationPath, [
+                'reason_code' => 'conflict_discovered',
+                'reason_summary' => 'A material conflict was discovered after issuance and the verifier is withdrawing the prior conclusion.',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.revision.version_number', 2)
+            ->assertJsonPath('data.revision.revision_action', 'revoked');
+
+        $revisionId = (int) $revocation->json('data.revision.id');
+        $revision = SanctumScanAttestationRevision::query()->findOrFail($revisionId);
+
+        $this->assertSame('corroborated', $attestation->fresh()->outcome);
+        $this->assertSame($evidence->sha256, $revision->evidence_sha256);
+        $this->assertSame('accepted', SanctumScanExchange::query()->findOrFail($exchangeId)->status);
+        $this->assertSame('open', SanctumScanExchangeDispute::query()->firstOrFail()->status);
+
+        $this->actingAs($buyer, 'api')
+            ->getJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence')
+            ->assertOk()
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.current.status', 'revoked')
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.current.version_number', 2)
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.revisions.0.revision_action', 'revoked');
+
+        $this->actingAs($verifier, 'api')
+            ->postJson('/api/user/sanctum/verifier/memberships/' . $membership->getKey()
+                . '/attestations/' . $attestationId . '/corrections', [
+                    'verification_method' => 'document_review',
+                    'outcome' => 'corroborated',
+                    'basis_summary' => 'A correction after withdrawal must never reactivate a revoked attestation.',
+                    'reason_code' => 'other',
+                    'reason_summary' => 'This follow-up is intentionally rejected because withdrawal is terminal.',
+                ])
+            ->assertStatus(409)
+            ->assertJsonPath('error.code', 'attestation_already_revoked');
+
+        $this->assertSame(2, SanctumScanAttestationRevision::query()
+            ->where('attestation_id', $attestationId)
+            ->count());
+        $this->assertTrue(SanctumScanVerifierRegistryEvent::query()
+            ->where('event_type', 'attestation_revoked')
+            ->exists());
+        $this->assertTrue(SanctumScanExchangeEvent::query()
+            ->where('event_type', 'external_verifier_attestation_revoked')
+            ->exists());
+    }
+
     public function test_verifier_account_must_remain_active_and_verified_when_accepting_an_invitation(): void
     {
         $verifier = $this->makeBuyer('unverified-verifier-account');
