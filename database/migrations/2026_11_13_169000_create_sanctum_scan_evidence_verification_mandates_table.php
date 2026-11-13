@@ -41,7 +41,7 @@ return new class extends Migration
                 ->on('admins')
                 ->onDelete('restrict');
 
-            $table->unique(['evidence_id', 'institution_id'], 'sanctum_scan_evidence_mandate_unique');
+            $table->index(['evidence_id', 'institution_id', 'status', 'expires_at'], 'sanctum_scan_mandate_scope_index');
             $table->index(['institution_id', 'status', 'expires_at'], 'sanctum_scan_mandate_authority_index');
         });
     }
