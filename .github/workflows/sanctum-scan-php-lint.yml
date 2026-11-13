@@ -1,0 +1,46 @@
+name: Sanctum Scan PHP syntax
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '**/*.php'
+      - '.github/workflows/sanctum-scan-php-lint.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  php-lint:
+    name: Lint changed PHP files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Lint changed PHP files
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        shell: bash
+        run: |
+          git fetch origin "$BASE_REF" --depth=1
+          mapfile -t php_files < <(git diff --diff-filter=ACMRT --name-only "origin/$BASE_REF...HEAD" -- '*.php')
+
+          if [[ ${#php_files[@]} -eq 0 ]]; then
+            echo "No changed PHP files to lint."
+            exit 0
+          fi
+
+          for file in "${php_files[@]}"; do
+            echo "Linting $file"
+            php -l "$file"
+          done

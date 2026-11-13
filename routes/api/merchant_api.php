@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\Merchant\UserController;
 use App\Http\Controllers\Api\Merchant\ReceiveMoneyController;
 use App\Http\Controllers\Api\Merchant\SecurityController;
 use App\Http\Controllers\Api\Merchant\SanctumScanReferenceController;
+use App\Http\Controllers\Api\Merchant\SanctumScanResourceController;
 use App\Http\Controllers\Api\Merchant\SetupPinController;
 use App\Http\Controllers\Api\Merchant\TransactionController;
 use App\Http\Helpers\Api\Helpers;
@@ -112,6 +113,21 @@ Route::prefix('merchant')->group(function(){
                     Route::delete('/{referenceId}', 'destroy')
                         ->whereNumber('referenceId')
                         ->name('destroy');
+                });
+            Route::controller(SanctumScanResourceController::class)
+                ->prefix('sanctum/resources')
+                ->name('sanctum.resources.')
+                ->middleware('throttle:10,1')
+                ->group(function () {
+                    Route::get('/', 'index')->name('index');
+                    Route::post('/', 'store')->name('store')->middleware('api.kyc');
+                    Route::post('/{resourceId}/scan-reference', 'rotateScanReference')
+                        ->whereNumber('resourceId')
+                        ->name('rotate-scan-reference')
+                        ->middleware('api.kyc');
+                    Route::delete('/{resourceId}', 'archive')
+                        ->whereNumber('resourceId')
+                        ->name('archive');
                 });
             Route::get('dashboard', [UserController::class,'home']);
             Route::post('verify/pin', [UserController::class,'pinVerify'])->middleware(['merchant.pin.setup.guard']);

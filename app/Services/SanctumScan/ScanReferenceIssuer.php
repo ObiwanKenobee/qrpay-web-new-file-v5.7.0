@@ -11,6 +11,7 @@ class ScanReferenceIssuer
     public const RESOURCE_TYPES = [
         'merchant',
         'product',
+        'agricultural_batch',
         'asset',
         'agreement',
         'payment_request',

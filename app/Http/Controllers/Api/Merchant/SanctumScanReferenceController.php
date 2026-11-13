@@ -104,7 +104,7 @@ class SanctumScanReferenceController extends Controller
                 (int) $merchant->getKey()
             );
 
-            $scanUrl = route('sanctum.scan.resolve', [
+            $scanUrl = route('sanctum.scan.public', [
                 'reference' => $issued['reference'],
             ]);
 
