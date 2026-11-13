@@ -1117,32 +1117,40 @@ Contributors should consult the repository's contribution guidelines, security p
 - Versioned opaque references using 256-bit random tokens.
 - SHA-256 hashes stored in the database.
 - Expiry and revocation support.
-- Public resolution endpoint: `GET /api/sanctum/v1/scan/{reference}`.
-- Uniform not-found responses for invalid, unknown, expired and revoked references.
+- Public resolution API: \`GET /api/sanctum/v1/scan/{reference}\`.
 
 **Milestone 003 — Merchant identity and QR lifecycle**
 
 - Authenticated merchant reference issuance, listing and revocation.
-- Merchant ownership is derived from the `merchant_api` authentication guard.
-- Issuance and revocation record actor guard and ID.
-- QR codes encode the public scan URL as an SVG data URI.
-- Public resolution uses the current business name and exposes only the merchant handle.
-- Inactive and deleted merchant profiles do not resolve.
-- Legacy merchant QR records are not reused because they currently encode email addresses or phone numbers.
+- Merchant ownership and audit actor attribution.
+- QR payloads contain opaque public scan URLs rather than email or phone numbers.
+- Public merchant identity is limited to a business name and handle.
 
-The merchant QR endpoints are:
+**Milestone 004 — Public scan experience and economic resource registry**
 
-```http
-GET    /merchant-api/merchant/sanctum/scan-references
-POST   /merchant-api/merchant/sanctum/scan-references
-DELETE /merchant-api/merchant/sanctum/scan-references/{referenceId}
-```
+- Mobile-first public scan pages at \`GET /scan/{reference}\`.
+- Shared resolver for public web and JSON API surfaces.
+- Merchant-owned product and agricultural batch records.
+- Merchant API for resource listing, creation, QR rotation and archival.
+- QR codes resolve to public scan pages and contain only opaque references.
+- Agricultural batch details include category, variety, declared origin and harvest date.
+- Append-only provenance events record who supplied each statement and when.
+- Provenance is explicitly labelled merchant-declared; no independent verification is implied.
+- Quantity and unit are private to the merchant in this release.
+- Archiving a resource revokes active scan references.
 
-Issuance returns the QR data URI and plaintext scan URL once. Listing never returns stored hashes or plaintext tokens. A lost QR must be replaced by issuing a new reference and revoking the old one.
+Merchant resource endpoints:
 
-These endpoints create and manage public merchant-profile references only. They do not initiate, authorize or settle payments.
+\`\`\`http
+GET    /merchant-api/merchant/sanctum/resources
+POST   /merchant-api/merchant/sanctum/resources
+POST   /merchant-api/merchant/sanctum/resources/{resourceId}/scan-reference
+DELETE /merchant-api/merchant/sanctum/resources/{resourceId}
+\`\`\`
 
-See [ADR 0002](docs/architecture/decisions/0002-scan-reference-resolution.md) and [ADR 0003](docs/architecture/decisions/0003-merchant-scan-identity.md).
+The public scan page is informational. It does not initiate payments, prove ownership, verify product quality, or establish delivery.
+
+See [ADR 0002](docs/architecture/decisions/0002-scan-reference-resolution.md), [ADR 0003](docs/architecture/decisions/0003-merchant-scan-identity.md), and [ADR 0004](docs/architecture/decisions/0004-public-scan-and-resource-registry.md).
 
 **Project:** Atlas Sanctum — Sanctum Scan.
 
