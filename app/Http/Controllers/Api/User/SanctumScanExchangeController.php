@@ -53,6 +53,10 @@ class SanctumScanExchangeController extends Controller
                 return 'expired';
             }
 
+            if ($exchange->status !== 'offered') {
+                return null;
+            }
+
             $merchantIsActive = Merchant::query()
                 ->whereKey($exchange->merchant_id)
                 ->where('status', true)
@@ -81,10 +85,6 @@ class SanctumScanExchangeController extends Controller
                 );
 
                 return 'withdrawn';
-            }
-
-            if ($exchange->status !== 'offered') {
-                return null;
             }
 
             $exchange->forceFill([
