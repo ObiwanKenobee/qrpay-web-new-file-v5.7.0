@@ -835,6 +835,7 @@ class EconomicExchangeLifecycleTest extends TestCase
             ->get('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence/' . $evidence->getKey() . '/download')
             ->assertDownload('payment-receipt.pdf');
 
+        $this->app['auth']->forgetGuards();
         $this->get('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence/' . $evidence->getKey() . '/download')
             ->assertUnauthorized();
     }
