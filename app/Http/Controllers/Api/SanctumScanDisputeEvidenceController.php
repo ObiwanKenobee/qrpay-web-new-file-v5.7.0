@@ -182,7 +182,6 @@ class SanctumScanDisputeEvidenceController extends Controller
                 ->map(fn (SanctumScanIndependentAttestation $attestation) => $this->presentAttestation($attestation))
                 ->values()
                 ->all(),
-            ])->values()->all(),
             'verification' => $review ? [
                 'status' => $review->review_status,
                 'method' => $review->review_method,
