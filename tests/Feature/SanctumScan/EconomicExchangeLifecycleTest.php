@@ -905,6 +905,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->actingAs($buyer, 'api')
             ->post('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence', [
                 'evidence_type' => 'payment_receipt',
+                'caption' => 'Receipt supplied for review.',
                 'file' => UploadedFile::fake()->createWithContent('receipt.pdf', '%PDF-1.4 review fixture'),
             ], ['Accept' => 'application/json'])
             ->assertCreated();
@@ -945,14 +946,14 @@ class EconomicExchangeLifecycleTest extends TestCase
         try {
             $review->update(['review_status' => 'rejected']);
             $this->fail('Evidence reviews should be immutable.');
-        } catch (\\LogicException $exception) {
+        } catch (\LogicException $exception) {
             $this->assertSame('Sanctum Scan evidence reviews are immutable.', $exception->getMessage());
         }
 
         try {
             $evidence->update(['caption' => 'Modified after submission']);
             $this->fail('Submitted evidence metadata should be immutable.');
-        } catch (\\LogicException $exception) {
+        } catch (\LogicException $exception) {
             $this->assertSame('Submitted dispute evidence is immutable.', $exception->getMessage());
         }
 
