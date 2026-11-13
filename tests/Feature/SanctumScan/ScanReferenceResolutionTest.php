@@ -3,17 +3,27 @@
 namespace Tests\Feature\SanctumScan;
 
 use App\Services\SanctumScan\ScanReferenceIssuer;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
 use Tests\TestCase;
 
 class ScanReferenceResolutionTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();
+
+        // Isolate this feature slice from the inherited application's legacy migrations.
+        config([
+            'database.default' => 'sqlite',
+            'database.connections.sqlite.database' => ':memory:',
+            'database.connections.sqlite.prefix' => '',
+        ]);
+        DB::purge('sqlite');
+
+        $migration = require base_path('database/migrations/2026_11_13_130000_create_sanctum_scan_references_table.php');
+        $migration->up();
 
         // The legacy maintenance middleware assumes a settings row exists.
         // These tests cover the resolver, not that unrelated middleware.
@@ -118,5 +128,13 @@ class ScanReferenceResolutionTest extends TestCase
             null,
             now()->subMinute()
         );
+    }
+
+    protected function tearDown(): void
+    {
+        Schema::dropIfExists('sanctum_scan_references');
+        DB::purge('sqlite');
+
+        parent::tearDown();
     }
 }
