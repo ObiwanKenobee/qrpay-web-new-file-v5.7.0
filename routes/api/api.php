@@ -188,7 +188,8 @@ Route::prefix('user')->group(function(){
                 ->name('api.user.sanctum.exchanges.dispute.evidence.index');
             Route::post('sanctum/exchanges/{exchangeId}/dispute/evidence', [SanctumScanDisputeEvidenceController::class, 'store'])
                 ->whereNumber('exchangeId')
-                ->name('api.user.sanctum.exchanges.dispute.evidence.store');
+                ->name('api.user.sanctum.exchanges.dispute.evidence.store')
+                ->middleware('throttle:3,1');
             Route::get('sanctum/exchanges/{exchangeId}/dispute/evidence/{evidenceId}/download', [SanctumScanDisputeEvidenceController::class, 'download'])
                 ->whereNumber('exchangeId')
                 ->whereNumber('evidenceId')
