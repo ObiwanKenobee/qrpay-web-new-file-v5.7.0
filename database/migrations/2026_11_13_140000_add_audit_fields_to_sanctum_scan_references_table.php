@@ -12,7 +12,7 @@ return new class extends Migration
             $table->string('created_by_guard', 32)->nullable();
             $table->unsignedBigInteger('created_by_id')->nullable();
             $table->string('revoked_by_guard', 32)->nullable();
-            $table->unsignedBigInteger('revoked_by_id')->nullable()->after('revoked_by_guard');
+            $table->unsignedBigInteger('revoked_by_id')->nullable();
 
             $table->index(
                 ['created_by_guard', 'created_by_id'],
