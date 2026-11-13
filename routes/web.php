@@ -21,6 +21,11 @@ use App\Http\Controllers\Api\Agent\AddMoneyController as AgentAddMoneyController
 */
 
 
+// Public scan pages are informational; they never authorize or execute a payment.
+Route::get('/scan/{reference}', [\App\Http\Controllers\SanctumScan\PublicScanController::class, 'show'])
+    ->middleware('throttle:60,1')
+    ->name('sanctum.scan.public');
+
 //landing pages
 Route::controller(SiteController::class)->group(function(){
     Route::get('/','home')->name('index');
