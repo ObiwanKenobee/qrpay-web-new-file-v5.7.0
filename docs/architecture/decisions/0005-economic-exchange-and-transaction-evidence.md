@@ -18,7 +18,7 @@ Introduce a separate economic exchange record linked to a merchant, an authentic
 
 - Only an authenticated merchant can issue an offer.
 - The offered resource must be published and owned by that merchant.
-- The buyer is identified by an existing active user account username.
+- The buyer is identified by an existing active, email-verified and SMS-verified user account username.
 - The offer snapshots resource type, name and reference code so historical terms remain intelligible if the resource changes later.
 - Quantity, unit, total offer amount, three-letter currency code, optional terms and expiry are stored on the exchange record.
 - The amount represents the total for the offered quantity, not a per-unit price.
@@ -38,7 +38,7 @@ Introduce a separate economic exchange record linked to a merchant, an authentic
 
 \`dispatched\` can transition to \`received\` by the named buyer.
 
-Receipt confirmation is a buyer declaration, not independent proof of delivery. Accepted offers cannot be unilaterally cancelled through this initial API. Disputes, amendments and refunds are outside this slice.
+Receipt confirmation is a buyer declaration, not independent proof of delivery. Accepted offers cannot be unilaterally cancelled through this initial API. Dispatch and receipt actions are strictly ordered; disputes, amendments and refunds are outside this slice.
 
 ### Event evidence
 
