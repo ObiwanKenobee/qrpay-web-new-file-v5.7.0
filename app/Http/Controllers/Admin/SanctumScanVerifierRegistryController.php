@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\SanctumScanVerifierInstitution;
 use App\Models\SanctumScanVerifierMembership;
 use App\Models\SanctumScanAttestationAppeal;
+use App\Models\SanctumScanVerifierCredentialReview;
 use App\Services\SanctumScan\IndependentVerificationManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -185,6 +186,46 @@ class SanctumScanVerifierRegistryController extends Controller
                     'institution_id' => $result->institution_id,
                     'status' => $result->status,
                     'expires_at' => $result->expires_at?->toIso8601String(),
+                ],
+            ],
+        ]);
+    }
+
+    public function credentialReviews(int $institutionId): JsonResponse
+    {
+        $page = SanctumScanVerifierCredentialReview::query()
+            ->with('membership')
+            ->where('institution_id', $institutionId)
+            ->orderByDesc('id')
+            ->paginate(50);
+
+        return response()->json([
+            'data' => [
+                'credential_reviews' => $page->getCollection()->map(
+                    fn (SanctumScanVerifierCredentialReview $review) => [
+                        'id' => $review->getKey(),
+                        'institution_id' => $review->institution_id,
+                        'membership_id' => $review->membership_id,
+                        'verifier_user_id' => $review->membership?->user_id,
+                        'credential_scope' => $review->credential_scope,
+                        'credential_type' => $review->credential_type,
+                        'issuer_name' => $review->issuer_name,
+                        'credential_reference' => $review->credential_reference,
+                        'jurisdiction' => $review->jurisdiction,
+                        'source_url' => $review->source_url,
+                        'review_method' => $review->review_method,
+                        'review_status' => $review->review_status,
+                        'review_summary' => $review->review_summary,
+                        'reviewed_by_admin_id' => $review->reviewed_by_admin_id,
+                        'reviewed_at' => $review->reviewed_at?->toIso8601String(),
+                        'expires_at' => $review->expires_at?->toIso8601String(),
+                    ]
+                )->values(),
+                'pagination' => [
+                    'current_page' => $page->currentPage(),
+                    'last_page' => $page->lastPage(),
+                    'per_page' => $page->perPage(),
+                    'total' => $page->total(),
                 ],
             ],
         ]);
