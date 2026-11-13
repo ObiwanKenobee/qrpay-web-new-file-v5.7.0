@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\SanctumScanExchangeDisputeEvidence;
+use App\Models\SanctumScanIndependentAttestation;
 use App\Services\SanctumScan\DisputeEvidenceManager;
 use App\Services\SanctumScan\IndependentVerificationManager;
 use Illuminate\Http\JsonResponse;
@@ -177,26 +178,10 @@ class SanctumScanDisputeEvidenceController extends Controller
             'caption' => $evidence->caption,
             'submitted_by' => $evidence->submitted_by_guard === 'merchant_api' ? 'merchant' : 'buyer',
             'submitted_at' => $evidence->submitted_at?->toIso8601String(),
-            'independent_attestations' => $evidence->attestations->map(fn ($attestation) => [
-                'id' => $attestation->getKey(),
-                'institution_name' => $attestation->institution?->name,
-                'verification_scope' => $attestation->verification_scope,
-                'verification_method' => $attestation->verification_method,
-                'outcome' => $attestation->outcome,
-                'basis_summary' => $attestation->basis_summary,
-                'evidence_sha256' => $attestation->evidence_sha256,
-                'attested_at' => $attestation->attested_at?->toIso8601String(),
-                'appeals' => $attestation->appeals->map(fn ($appeal) => [
-                    'id' => $appeal->getKey(),
-                    'reason_code' => $appeal->reason_code,
-                    'statement' => $appeal->statement,
-                    'submitted_at' => $appeal->submitted_at?->toIso8601String(),
-                    'decision' => $appeal->decision ? [
-                        'outcome' => $appeal->decision->outcome,
-                        'summary' => $appeal->decision->decision_summary,
-                        'decided_at' => $appeal->decision->decided_at?->toIso8601String(),
-                    ] : null,
-                ])->values()->all(),
+            'independent_attestations' => $evidence->attestations
+                ->map(fn (SanctumScanIndependentAttestation $attestation) => $this->presentAttestation($attestation))
+                ->values()
+                ->all(),
             ])->values()->all(),
             'verification' => $review ? [
                 'status' => $review->review_status,
@@ -209,4 +194,56 @@ class SanctumScanDisputeEvidenceController extends Controller
             ],
         ];
     }
+
+    private function presentAttestation(SanctumScanIndependentAttestation $attestation): array
+    {
+        $latest = $attestation->revisions->last();
+
+        return [
+            'id' => $attestation->getKey(),
+            'institution_name' => $attestation->institution?->name,
+            'verification_scope' => $attestation->verification_scope,
+            'verification_method' => $attestation->verification_method,
+            'outcome' => $attestation->outcome,
+            'basis_summary' => $attestation->basis_summary,
+            'evidence_sha256' => $attestation->evidence_sha256,
+            'attested_at' => $attestation->attested_at?->toIso8601String(),
+            'current' => [
+                'status' => $latest?->revision_action === 'revoked' ? 'revoked' : 'active',
+                'version_number' => $latest?->version_number ?? 1,
+                'verification_scope' => $latest?->verification_scope ?? $attestation->verification_scope,
+                'verification_method' => $latest?->verification_method ?? $attestation->verification_method,
+                'outcome' => $latest?->outcome ?? $attestation->outcome,
+                'basis_summary' => $latest?->basis_summary ?? $attestation->basis_summary,
+                'recorded_at' => $latest?->recorded_at?->toIso8601String()
+                    ?? $attestation->attested_at?->toIso8601String(),
+            ],
+            'revisions' => $attestation->revisions->map(fn ($revision) => [
+                'id' => $revision->getKey(),
+                'version_number' => $revision->version_number,
+                'previous_revision_id' => $revision->previous_revision_id,
+                'revision_action' => $revision->revision_action,
+                'verification_scope' => $revision->verification_scope,
+                'verification_method' => $revision->verification_method,
+                'outcome' => $revision->outcome,
+                'basis_summary' => $revision->basis_summary,
+                'reason_code' => $revision->reason_code,
+                'reason_summary' => $revision->reason_summary,
+                'evidence_sha256' => $revision->evidence_sha256,
+                'recorded_at' => $revision->recorded_at?->toIso8601String(),
+            ])->values()->all(),
+            'appeals' => $attestation->appeals->map(fn ($appeal) => [
+                'id' => $appeal->getKey(),
+                'reason_code' => $appeal->reason_code,
+                'statement' => $appeal->statement,
+                'submitted_at' => $appeal->submitted_at?->toIso8601String(),
+                'decision' => $appeal->decision ? [
+                    'outcome' => $appeal->decision->outcome,
+                    'summary' => $appeal->decision->decision_summary,
+                    'decided_at' => $appeal->decision->decided_at?->toIso8601String(),
+                ] : null,
+            ])->values()->all(),
+        ];
+    }
+
 }
