@@ -1152,6 +1152,43 @@ The public scan page is informational. It does not initiate payments, prove owne
 
 See [ADR 0002](docs/architecture/decisions/0002-scan-reference-resolution.md), [ADR 0003](docs/architecture/decisions/0003-merchant-scan-identity.md), and [ADR 0004](docs/architecture/decisions/0004-public-scan-and-resource-registry.md). Read the [merchant economic resource API guide](docs/api/sanctum-scan-resources.md) for request examples and lifecycle behavior. A [PHP syntax lint workflow](.github/workflows/sanctum-scan-php-lint.yml) checks changed PHP files on pull requests.
 
+**Milestone 005 — Economic exchange and transaction evidence**
+
+- Merchant issues an offer for a published product or agricultural batch to a named active, email- and SMS-verified user.
+- Buyer can list, accept or decline only offers addressed to their account.
+- Merchant can dispatch only an accepted offer.
+- Buyer can confirm receipt only after dispatch.
+- Exchange records snapshot the resource identity and negotiated quantity, total amount, currency, terms and expiry.
+- Append-only events record offer, acceptance, decline, dispatch, receipt and expiry/withdrawal actions with actor attribution.
+- Buyer can submit one payment reference with the rail, reference, amount and currency.
+- Submitted payment evidence is immutable and always marked unverified in this milestone.
+- Payment evidence must match the accepted offer amount and currency.
+- No wallet balances, financial transactions, payment orders or settlement states are changed.
+- Existing checkout and payment infrastructure remains separate and authoritative for actual payment reconciliation.
+
+Merchant exchange endpoints:
+
+\`\`\`http
+GET  /merchant-api/merchant/sanctum/exchanges
+POST /merchant-api/merchant/sanctum/exchanges
+POST /merchant-api/merchant/sanctum/exchanges/{exchangeId}/dispatch
+POST /merchant-api/merchant/sanctum/exchanges/{exchangeId}/cancel
+\`\`\`
+
+Buyer exchange endpoints:
+
+\`\`\`http
+GET  /api/user/sanctum/exchanges
+POST /api/user/sanctum/exchanges/{exchangeId}/accept
+POST /api/user/sanctum/exchanges/{exchangeId}/decline
+POST /api/user/sanctum/exchanges/{exchangeId}/receipt
+POST /api/user/sanctum/exchanges/{exchangeId}/payment-reference
+\`\`\`
+
+The first exchange workflow does not reserve stock, execute payments, verify delivery, resolve disputes or reconcile provider settlement. Buyer receipt and merchant dispatch are attributed declarations, not independent proof.
+
+See [ADR 0005](docs/architecture/decisions/0005-economic-exchange-and-transaction-evidence.md) and the [economic exchange API guide](docs/api/sanctum-scan-exchanges.md).
+
 **Project:** Atlas Sanctum — Sanctum Scan.
 
 **Initial geographic research context:** Nakuru County, Kenya.

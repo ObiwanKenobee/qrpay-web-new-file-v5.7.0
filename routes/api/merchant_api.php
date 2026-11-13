@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\Merchant\ReceiveMoneyController;
 use App\Http\Controllers\Api\Merchant\SecurityController;
 use App\Http\Controllers\Api\Merchant\SanctumScanReferenceController;
 use App\Http\Controllers\Api\Merchant\SanctumScanResourceController;
+use App\Http\Controllers\Api\Merchant\SanctumScanExchangeMerchantController;
 use App\Http\Controllers\Api\Merchant\SetupPinController;
 use App\Http\Controllers\Api\Merchant\TransactionController;
 use App\Http\Helpers\Api\Helpers;
@@ -129,6 +130,21 @@ Route::prefix('merchant')->group(function(){
                         ->whereNumber('resourceId')
                         ->name('archive');
                 });
+            Route::get('sanctum/exchanges', [SanctumScanExchangeMerchantController::class, 'index'])
+                ->name('sanctum.exchanges.index')
+                ->middleware('throttle:30,1');
+
+            Route::middleware(['merchant.pin.setup.guard', 'throttle:10,1'])->group(function () {
+                Route::post('sanctum/exchanges', [SanctumScanExchangeMerchantController::class, 'store'])
+                    ->name('sanctum.exchanges.store')
+                    ->middleware('api.kyc');
+                Route::post('sanctum/exchanges/{exchangeId}/dispatch', [SanctumScanExchangeMerchantController::class, 'dispatch'])
+                    ->whereNumber('exchangeId')
+                    ->name('sanctum.exchanges.dispatch');
+                Route::post('sanctum/exchanges/{exchangeId}/cancel', [SanctumScanExchangeMerchantController::class, 'cancel'])
+                    ->whereNumber('exchangeId')
+                    ->name('sanctum.exchanges.cancel');
+            });
             Route::get('dashboard', [UserController::class,'home']);
             Route::post('verify/pin', [UserController::class,'pinVerify'])->middleware(['merchant.pin.setup.guard']);
             Route::get('get-remaining', [UserController::class,'getRemainingBalance']);
