@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\Merchant\SanctumScanReferenceController;
 use App\Http\Controllers\Api\Merchant\SanctumScanResourceController;
 use App\Http\Controllers\Api\Merchant\SanctumScanExchangeMerchantController;
 use App\Http\Controllers\Api\SanctumScanExchangeDisputeController;
+use App\Http\Controllers\Api\SanctumScanDisputeEvidenceController;
 use App\Http\Controllers\Api\Merchant\SetupPinController;
 use App\Http\Controllers\Api\Merchant\TransactionController;
 use App\Http\Helpers\Api\Helpers;
@@ -169,6 +170,18 @@ Route::prefix('merchant')->group(function(){
                 Route::post('sanctum/exchanges/{exchangeId}/dispute/withdraw', [SanctumScanExchangeDisputeController::class, 'withdraw'])
                     ->whereNumber('exchangeId')
                     ->name('sanctum.exchanges.dispute.withdraw');
+
+                Route::get('sanctum/exchanges/{exchangeId}/dispute/evidence', [SanctumScanDisputeEvidenceController::class, 'index'])
+                    ->whereNumber('exchangeId')
+                    ->name('sanctum.exchanges.dispute.evidence.index');
+                Route::post('sanctum/exchanges/{exchangeId}/dispute/evidence', [SanctumScanDisputeEvidenceController::class, 'store'])
+                    ->whereNumber('exchangeId')
+                    ->name('sanctum.exchanges.dispute.evidence.store')
+                    ->middleware('throttle:3,1');
+                Route::get('sanctum/exchanges/{exchangeId}/dispute/evidence/{evidenceId}/download', [SanctumScanDisputeEvidenceController::class, 'download'])
+                    ->whereNumber('exchangeId')
+                    ->whereNumber('evidenceId')
+                    ->name('sanctum.exchanges.dispute.evidence.download');
             });
             Route::get('dashboard', [UserController::class,'home']);
             Route::post('verify/pin', [UserController::class,'pinVerify'])->middleware(['merchant.pin.setup.guard']);

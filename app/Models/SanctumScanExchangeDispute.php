@@ -39,4 +39,10 @@ class SanctumScanExchangeDispute extends Model
         return $this->hasMany(SanctumScanExchangeDisputeMessage::class, 'dispute_id')
             ->orderBy('id');
     }
+
+    public function evidence(): HasMany
+    {
+        return $this->hasMany(SanctumScanExchangeDisputeEvidence::class, 'dispute_id')
+            ->orderBy('id');
+    }
 }
