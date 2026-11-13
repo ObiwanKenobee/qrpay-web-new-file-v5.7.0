@@ -9,9 +9,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('sanctum_scan_references', function (Blueprint $table) {
-            $table->string('created_by_guard', 32)->nullable()->after('revoked_at');
-            $table->unsignedBigInteger('created_by_id')->nullable()->after('created_by_guard');
-            $table->string('revoked_by_guard', 32)->nullable()->after('created_by_id');
+            $table->string('created_by_guard', 32)->nullable();
+            $table->unsignedBigInteger('created_by_id')->nullable();
+            $table->string('revoked_by_guard', 32)->nullable();
             $table->unsignedBigInteger('revoked_by_id')->nullable()->after('revoked_by_guard');
 
             $table->index(
