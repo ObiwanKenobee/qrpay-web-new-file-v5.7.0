@@ -127,6 +127,16 @@ class SanctumScanDisputeEvidenceController extends Controller
             'caption' => $evidence->caption,
             'submitted_by' => $evidence->submitted_by_guard === 'merchant_api' ? 'merchant' : 'buyer',
             'submitted_at' => $evidence->submitted_at?->toIso8601String(),
+            'independent_attestations' => $evidence->attestations->map(fn ($attestation) => [
+                'id' => $attestation->getKey(),
+                'institution_name' => $attestation->institution?->name,
+                'verification_scope' => $attestation->verification_scope,
+                'verification_method' => $attestation->verification_method,
+                'outcome' => $attestation->outcome,
+                'basis_summary' => $attestation->basis_summary,
+                'evidence_sha256' => $attestation->evidence_sha256,
+                'attested_at' => $attestation->attested_at?->toIso8601String(),
+            ])->values()->all(),
             'verification' => $review ? [
                 'status' => $review->review_status,
                 'method' => $review->review_method,
