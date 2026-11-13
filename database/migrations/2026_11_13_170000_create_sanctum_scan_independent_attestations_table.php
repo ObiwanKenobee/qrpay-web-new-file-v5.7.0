@@ -23,27 +23,27 @@ return new class extends Migration
             $table->timestamp('attested_at');
             $table->timestamp('created_at')->useCurrent();
 
-            $table->foreign('mandate_id')
+            $table->foreign('mandate_id', 'sanctum_scan_attest_mandate_fk')
                 ->references('id')
                 ->on('sanctum_scan_evidence_verification_mandates')
                 ->onDelete('restrict');
 
-            $table->foreign('evidence_id')
+            $table->foreign('evidence_id', 'sanctum_scan_attest_evidence_fk')
                 ->references('id')
                 ->on('sanctum_scan_exchange_dispute_evidence')
                 ->onDelete('restrict');
 
-            $table->foreign('institution_id')
+            $table->foreign('institution_id', 'sanctum_scan_attest_institution_fk')
                 ->references('id')
                 ->on('sanctum_scan_verifier_institutions')
                 ->onDelete('restrict');
 
-            $table->foreign('membership_id')
+            $table->foreign('membership_id', 'sanctum_scan_attest_member_fk')
                 ->references('id')
                 ->on('sanctum_scan_verifier_memberships')
                 ->onDelete('restrict');
 
-            $table->foreign('verifier_user_id')
+            $table->foreign('verifier_user_id', 'sanctum_scan_attest_user_fk')
                 ->references('id')
                 ->on('users')
                 ->onDelete('restrict');
