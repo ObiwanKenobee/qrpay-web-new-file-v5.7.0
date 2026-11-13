@@ -46,6 +46,17 @@ class EconomicExchangeLifecycleTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('admins', function (Blueprint $table) {
+            $table->id();
+            $table->string('firstname')->nullable();
+            $table->string('lastname')->nullable();
+            $table->string('username')->nullable()->unique();
+            $table->string('email')->nullable()->unique();
+            $table->string('password')->nullable();
+            $table->boolean('status')->default(true);
+            $table->timestamps();
+        });
+
         Schema::create('merchants', function (Blueprint $table) {
             $table->id();
             $table->string('firstname');
@@ -76,6 +87,10 @@ class EconomicExchangeLifecycleTest extends TestCase
         $disputeMigration->up();
         $disputeMessageMigration = require base_path('database/migrations/2026_11_13_164000_create_sanctum_scan_exchange_dispute_messages_table.php');
         $disputeMessageMigration->up();
+        $evidenceMigration = require base_path('database/migrations/2026_11_13_165000_create_sanctum_scan_exchange_dispute_evidence_table.php');
+        $evidenceMigration->up();
+        $evidenceReviewMigration = require base_path('database/migrations/2026_11_13_166000_create_sanctum_scan_exchange_evidence_reviews_table.php');
+        $evidenceReviewMigration->up();
 
         // Keep Passport authentication, participant status and 2FA checks active.
         // Disable only environment-dependent maintenance, PIN and global KYC gates.
@@ -766,8 +781,251 @@ class EconomicExchangeLifecycleTest extends TestCase
         );
     }
 
+
+    public function test_dispute_evidence_is_private_and_available_only_to_exchange_participants(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        $merchant = $this->makeMerchant('evidence-private-seller', 'Evidence Private Seller');
+        $buyer = $this->makeBuyer('evidence-private-buyer');
+        $outsider = $this->makeBuyer('evidence-private-outsider');
+        $resource = $this->makeResource($merchant);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+        $exchangeId = $offer['id'];
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->assertOk();
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute', [
+                'category' => 'payment_question',
+                'statement' => 'The payment reference needs to be checked against the receipt.',
+            ])
+            ->assertCreated();
+
+        $upload = $this->actingAs($buyer, 'api')
+            ->post('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence', [
+                'evidence_type' => 'payment_receipt',
+                'caption' => 'Receipt supplied for review.',
+                'file' => UploadedFile::fake()->create('payment-receipt.pdf', 32, 'application/pdf'),
+            ], ['Accept' => 'application/json']);
+
+        $upload->assertCreated()
+            ->assertJsonPath('data.evidence.original_name', 'payment-receipt.pdf')
+            ->assertJsonPath('data.evidence.verification.status', 'pending');
+
+        $evidence = SanctumScanExchangeDisputeEvidence::query()->firstOrFail();
+        $this->assertSame('local', $evidence->storage_disk);
+        $this->assertStringStartsWith('sanctum-scan/disputes/', $evidence->storage_path);
+        Storage::disk('local')->assertExists($evidence->storage_path);
+        Storage::disk('public')->assertMissing($evidence->storage_path);
+
+        $this->actingAs($merchant, 'merchant_api')
+            ->get('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute/evidence')
+            ->assertOk()
+            ->assertJsonPath('data.evidence.0.id', $evidence->getKey());
+
+        $this->actingAs($outsider, 'api')
+            ->get('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence/' . $evidence->getKey() . '/download')
+            ->assertNotFound();
+
+        $this->actingAs($buyer, 'api')
+            ->get('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence/' . $evidence->getKey() . '/download')
+            ->assertDownload('payment-receipt.pdf');
+
+        $this->get('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence/' . $evidence->getKey() . '/download')
+            ->assertUnauthorized();
+    }
+
+    public function test_duplicate_dispute_evidence_is_rejected(): void
+    {
+        Storage::fake('local');
+
+        $merchant = $this->makeMerchant('evidence-duplicate-seller', 'Evidence Duplicate Seller');
+        $buyer = $this->makeBuyer('evidence-duplicate-buyer');
+        $resource = $this->makeResource($merchant);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+        $exchangeId = $offer['id'];
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->assertOk();
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute', [
+                'category' => 'quality_concern',
+                'statement' => 'The product quality evidence needs review.',
+            ])
+            ->assertCreated();
+
+        $firstFile = UploadedFile::fake()->createWithContent('same-receipt.pdf', '%PDF-1.4 test evidence');
+        $first = $this->actingAs($buyer, 'api')
+            ->post('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence', [
+                'evidence_type' => 'quality_record',
+                'file' => $firstFile,
+            ], ['Accept' => 'application/json']);
+        $first->assertCreated();
+
+        $secondFile = UploadedFile::fake()->createWithContent('same-receipt-copy.pdf', '%PDF-1.4 test evidence');
+        $second = $this->actingAs($buyer, 'api')
+            ->post('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence', [
+                'evidence_type' => 'quality_record',
+                'file' => $secondFile,
+            ], ['Accept' => 'application/json']);
+
+        $second->assertStatus(409)
+            ->assertJsonPath('error.code', 'duplicate_evidence');
+
+        $this->assertSame(1, SanctumScanExchangeDisputeEvidence::query()->count());
+    }
+
+    public function test_admin_evidence_review_is_hash_bound_and_immutable(): void
+    {
+        Storage::fake('local');
+
+        $merchant = $this->makeMerchant('evidence-review-seller', 'Evidence Review Seller');
+        $buyer = $this->makeBuyer('evidence-review-buyer');
+        $resource = $this->makeResource($merchant);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+        $exchangeId = $offer['id'];
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->assertOk();
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute', [
+                'category' => 'payment_question',
+                'statement' => 'The supplied payment receipt should be checked.',
+            ])
+            ->assertCreated();
+
+        $this->actingAs($buyer, 'api')
+            ->post('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence', [
+                'evidence_type' => 'payment_receipt',
+                'file' => UploadedFile::fake()->createWithContent('receipt.pdf', '%PDF-1.4 review fixture'),
+            ], ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        $evidence = SanctumScanExchangeDisputeEvidence::query()->firstOrFail();
+        $adminId = DB::table('admins')->insertGetId([
+            'firstname' => 'Independent',
+            'lastname' => 'Reviewer',
+            'username' => 'evidence-reviewer',
+            'email' => 'evidence-reviewer@example.test',
+            'password' => bcrypt('not-a-real-password'),
+            'status' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $manager = app(DisputeEvidenceManager::class);
+        $review = $manager->review(
+            (int) $evidence->getKey(),
+            $adminId,
+            'verified',
+            'document_review',
+            'The document structure and reference information were reviewed against the submitted dispute context.'
+        );
+
+        $this->assertInstanceOf(SanctumScanExchangeEvidenceReview::class, $review);
+        $this->assertSame('verified', $review->review_status);
+        $this->assertSame($evidence->sha256, $review->evidence_sha256);
+        $this->assertSame(1, SanctumScanExchangeEvidenceReview::query()->count());
+        $this->assertDatabaseHas('sanctum_scan_exchange_events', [
+            'exchange_id' => $exchangeId,
+            'event_type' => 'dispute_evidence_reviewed',
+            'recorded_by_guard' => 'admin',
+            'recorded_by_id' => $adminId,
+            'verification_status' => 'platform_verified',
+        ]);
+
+        try {
+            $review->update(['review_status' => 'rejected']);
+            $this->fail('Evidence reviews should be immutable.');
+        } catch (\\LogicException $exception) {
+            $this->assertSame('Sanctum Scan evidence reviews are immutable.', $exception->getMessage());
+        }
+
+        try {
+            $evidence->update(['caption' => 'Modified after submission']);
+            $this->fail('Submitted evidence metadata should be immutable.');
+        } catch (\\LogicException $exception) {
+            $this->assertSame('Submitted dispute evidence is immutable.', $exception->getMessage());
+        }
+
+        $this->assertSame('verified', $review->fresh()->review_status);
+        $this->assertSame('Receipt supplied for review.', $evidence->fresh()->caption ?? null);
+    }
+
+    public function test_evidence_tampering_prevents_a_review_decision_and_download(): void
+    {
+        Storage::fake('local');
+
+        $merchant = $this->makeMerchant('evidence-tamper-seller', 'Evidence Tamper Seller');
+        $buyer = $this->makeBuyer('evidence-tamper-buyer');
+        $resource = $this->makeResource($merchant);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+        $exchangeId = $offer['id'];
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->assertOk();
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute', [
+                'category' => 'other',
+                'statement' => 'Evidence integrity should be checked.',
+            ])
+            ->assertCreated();
+
+        $this->actingAs($buyer, 'api')
+            ->post('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence', [
+                'evidence_type' => 'other',
+                'file' => UploadedFile::fake()->createWithContent('evidence.pdf', '%PDF-1.4 original'),
+            ], ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        $evidence = SanctumScanExchangeDisputeEvidence::query()->firstOrFail();
+        Storage::disk('local')->put($evidence->storage_path, 'tampered content');
+
+        $adminId = DB::table('admins')->insertGetId([
+            'firstname' => 'Integrity',
+            'lastname' => 'Reviewer',
+            'username' => 'integrity-reviewer',
+            'email' => 'integrity-reviewer@example.test',
+            'password' => bcrypt('not-a-real-password'),
+            'status' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $manager = app(DisputeEvidenceManager::class);
+        $this->assertSame(
+            'evidence_integrity_failure',
+            $manager->review(
+                (int) $evidence->getKey(),
+                $adminId,
+                'verified',
+                'document_review',
+                'The document was inspected and appeared valid based on the review criteria.'
+            )
+        );
+
+        $this->assertSame(0, SanctumScanExchangeEvidenceReview::query()->count());
+
+        $this->actingAs($buyer, 'api')
+            ->get('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence/' . $evidence->getKey() . '/download')
+            ->assertStatus(409)
+            ->assertJsonPath('error.code', 'evidence_integrity_failure');
+    }
+
     protected function tearDown(): void
     {
+        Schema::dropIfExists('sanctum_scan_exchange_evidence_reviews');
+        Schema::dropIfExists('sanctum_scan_exchange_dispute_evidence');
         Schema::dropIfExists('sanctum_scan_exchange_dispute_messages');
         Schema::dropIfExists('sanctum_scan_exchange_disputes');
         Schema::dropIfExists('sanctum_scan_exchange_payment_evidence');
@@ -775,6 +1033,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         Schema::dropIfExists('sanctum_scan_exchanges');
         Schema::dropIfExists('sanctum_scan_resources');
         Schema::dropIfExists('merchants');
+        Schema::dropIfExists('admins');
         Schema::dropIfExists('users');
         DB::purge('sqlite');
 
