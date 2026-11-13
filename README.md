@@ -1110,20 +1110,39 @@ Contributors should consult the repository's contribution guidelines, security p
 
 **Stage:** Research, architecture and early development.
 
-### Implemented protocol slice
+### Implemented protocol slices
 
-The first read-only Sanctum Scan resolver is available at:
+**Milestone 002 — Read-only scan reference resolution**
 
-```http
-GET /api/sanctum/v1/scan/{reference}
-```
+- Versioned opaque references using 256-bit random tokens.
+- SHA-256 hashes stored in the database.
+- Expiry and revocation support.
+- Public resolution endpoint: \`GET /api/sanctum/v1/scan/{reference}\`.
+- Uniform not-found responses for invalid, unknown, expired and revoked references.
 
-References use a high-entropy opaque token. The database stores only its SHA-256 hash. Resolution returns a small public resource description and does not expose internal resource IDs, authenticate the scanner, authorize a transaction or confirm payment settlement.
+**Milestone 003 — Merchant identity and QR lifecycle**
 
-The initial internal issuer supports merchant, product, asset, agreement, payment-request, community-project and service references. References can be revoked and can optionally expire. The resolver applies an endpoint-specific rate limit and returns the same public not-found response for malformed, unknown, expired and revoked references.
+- Authenticated merchant reference issuance, listing and revocation.
+- Merchant ownership is derived from the \`merchant_api\` authentication guard.
+- Issuance and revocation record actor guard and ID.
+- QR codes encode the public scan URL as an SVG data URI.
+- Public resolution uses the current business name and exposes only the merchant handle.
+- Inactive and deleted merchant profiles do not resolve.
+- Legacy merchant QR records are not reused because they currently encode email addresses or phone numbers.
 
-See [ADR 0002](docs/architecture/decisions/0002-scan-reference-resolution.md). The endpoint is a protocol foundation, not yet a complete QR-generation or merchant-onboarding workflow.
+The merchant QR endpoints are:
 
+\`\`\`http
+GET    /merchant-api/merchant/sanctum/scan-references
+POST   /merchant-api/merchant/sanctum/scan-references
+DELETE /merchant-api/merchant/sanctum/scan-references/{referenceId}
+\`\`\`
+
+Issuance returns the QR data URI and plaintext scan URL once. Listing never returns stored hashes or plaintext tokens. A lost QR must be replaced by issuing a new reference and revoking the old one.
+
+These endpoints create and manage public merchant-profile references only. They do not initiate, authorize or settle payments.
+
+See [ADR 0002](docs/architecture/decisions/0002-scan-reference-resolution.md) and [ADR 0003](docs/architecture/decisions/0003-merchant-scan-identity.md).
 
 **Project:** Atlas Sanctum — Sanctum Scan.
 
