@@ -64,7 +64,7 @@ class SanctumScanEvidenceReviewController extends Controller
     ): JsonResponse {
         $validated = $request->validate([
             'review_status' => 'required|in:verified,rejected,unable_to_verify',
-            'review_method' => 'required|in:document_review,provider_confirmation,field_inspection,other',
+            'review_method' => 'required|in:document_review,source_cross_check,field_inspection,other',
             'review_summary' => 'required|string|min:20|max:2000',
         ]);
 
