@@ -111,8 +111,7 @@ Route::prefix('merchant')->group(function(){
                     Route::post('/', 'store')->name('store')->middleware('api.kyc');
                     Route::delete('/{referenceId}', 'destroy')
                         ->whereNumber('referenceId')
-                        ->name('destroy')
-                        ->middleware('api.kyc');
+                        ->name('destroy');
                 });
             Route::get('dashboard', [UserController::class,'home']);
             Route::post('verify/pin', [UserController::class,'pinVerify'])->middleware(['merchant.pin.setup.guard']);
