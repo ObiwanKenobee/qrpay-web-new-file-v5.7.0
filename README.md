@@ -1117,7 +1117,7 @@ Contributors should consult the repository's contribution guidelines, security p
 - Versioned opaque references using 256-bit random tokens.
 - SHA-256 hashes stored in the database.
 - Expiry and revocation support.
-- Public resolution API: \`GET /api/sanctum/v1/scan/{reference}\`.
+- Public resolution API: `GET /api/sanctum/v1/scan/{reference}`.
 
 **Milestone 003 — Merchant identity and QR lifecycle**
 
@@ -1128,7 +1128,7 @@ Contributors should consult the repository's contribution guidelines, security p
 
 **Milestone 004 — Public scan experience and economic resource registry**
 
-- Mobile-first public scan pages at \`GET /scan/{reference}\`.
+- Mobile-first public scan pages at `GET /scan/{reference}`.
 - Shared resolver for public web and JSON API surfaces.
 - Merchant-owned product and agricultural batch records.
 - Merchant API for resource listing, creation, QR rotation and archival.
@@ -1141,12 +1141,12 @@ Contributors should consult the repository's contribution guidelines, security p
 
 Merchant resource endpoints:
 
-\`\`\`http
+```http
 GET    /merchant-api/merchant/sanctum/resources
 POST   /merchant-api/merchant/sanctum/resources
 POST   /merchant-api/merchant/sanctum/resources/{resourceId}/scan-reference
 DELETE /merchant-api/merchant/sanctum/resources/{resourceId}
-\`\`\`
+```
 
 The public scan page is informational. It does not initiate payments, prove ownership, verify product quality, or establish delivery.
 
