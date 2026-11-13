@@ -21,22 +21,22 @@ return new class extends Migration
             $table->timestamp('revoked_at')->nullable();
             $table->timestamps();
 
-            $table->foreign('evidence_id')
+            $table->foreign('evidence_id', 'sanctum_scan_mandate_evidence_fk')
                 ->references('id')
                 ->on('sanctum_scan_exchange_dispute_evidence')
                 ->onDelete('restrict');
 
-            $table->foreign('institution_id')
+            $table->foreign('institution_id', 'sanctum_scan_mandate_institution_fk')
                 ->references('id')
                 ->on('sanctum_scan_verifier_institutions')
                 ->onDelete('restrict');
 
-            $table->foreign('mandated_by_admin_id')
+            $table->foreign('mandated_by_admin_id', 'sanctum_scan_mandate_creator_fk')
                 ->references('id')
                 ->on('admins')
                 ->onDelete('restrict');
 
-            $table->foreign('revoked_by_admin_id')
+            $table->foreign('revoked_by_admin_id', 'sanctum_scan_mandate_revoker_fk')
                 ->references('id')
                 ->on('admins')
                 ->onDelete('restrict');
