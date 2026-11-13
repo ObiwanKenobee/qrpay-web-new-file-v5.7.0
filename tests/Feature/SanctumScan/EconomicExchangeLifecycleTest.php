@@ -1404,6 +1404,187 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->assertSame(0, SanctumScanIndependentAttestation::query()->count());
     }
 
+    public function test_exchange_participants_can_appeal_an_attestation_and_receive_an_immutable_process_decision(): void
+    {
+        Storage::fake('local');
+
+        $merchant = $this->makeMerchant('appeal-test-seller', 'Appeal Test Seller');
+        $buyer = $this->makeBuyer('appeal-test-buyer');
+        $verifier = $this->makeBuyer('appeal-test-verifier');
+        $outsider = $this->makeBuyer('appeal-test-outsider');
+        $fixture = $this->makeDisputeEvidenceForVerification($merchant, $buyer, 'appeal');
+        $evidence = $fixture['evidence'];
+        $exchangeId = (int) $fixture['exchange_id'];
+        $adminId = $this->makeAdminForVerification('appeal');
+        $manager = app(IndependentVerificationManager::class);
+
+        $institution = $manager->registerInstitution($adminId, [
+            'name' => 'Appeal Test Independent Institute',
+            'organization_type' => 'inspection_body',
+            'country_code' => 'KE',
+        ]);
+        $membership = $manager->inviteMember(
+            (int) $institution->getKey(),
+            (int) $verifier->getKey(),
+            $adminId
+        );
+
+        $this->actingAs($verifier, 'api')
+            ->postJson('/api/user/sanctum/verifier/memberships/' . $membership->getKey() . '/accept')
+            ->assertOk();
+
+        $manager->recordCredentialReview(
+            (int) $institution->getKey(),
+            null,
+            $adminId,
+            'institution_registration',
+            'business_registration',
+            'Kenya Business Registration Service',
+            'BRS-APPEAL-009',
+            'KE',
+            null,
+            'registry_lookup',
+            'verified',
+            'Institution registration was checked against the referenced official record.',
+            now()->addYear()->toDateTimeString()
+        );
+
+        $manager->recordCredentialReview(
+            (int) $institution->getKey(),
+            (int) $membership->getKey(),
+            $adminId,
+            'quality_observation',
+            'professional_inspector',
+            'Kenya Bureau of Standards',
+            'KEBS-APPEAL-009',
+            'KE',
+            null,
+            'issuer_confirmation',
+            'verified',
+            'The verifier qualification was checked for the required quality observation scope.',
+            now()->addYear()->toDateTimeString()
+        );
+
+        $mandate = $manager->grantMandate(
+            (int) $evidence->getKey(),
+            (int) $institution->getKey(),
+            $adminId,
+            'quality_observation',
+            'Review the submitted evidence for a scoped quality observation.',
+            now()->addDays(7)->toDateTimeString()
+        );
+
+        $this->actingAs($verifier, 'api')
+            ->postJson(
+                '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
+                    . '/evidence/' . $evidence->getKey() . '/conflict-declaration',
+                [
+                    'has_conflict' => false,
+                    'disclosure_statement' => 'I have disclosed the relationships and interests known to me for this assigned review.',
+                ]
+            )
+            ->assertCreated();
+
+        $attestationResponse = $this->actingAs($verifier, 'api')
+            ->postJson(
+                '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
+                    . '/evidence/' . $evidence->getKey() . '/attestations',
+                [
+                    'verification_scope' => 'quality_observation',
+                    'verification_method' => 'document_review',
+                    'outcome' => 'corroborated',
+                    'basis_summary' => 'The submitted material was corroborated against the stated quality observation criteria.',
+                ]
+            )
+            ->assertCreated();
+
+        $attestationId = (int) $attestationResponse->json('data.attestation.id');
+        $attestation = SanctumScanIndependentAttestation::query()->findOrFail($attestationId);
+
+        $buyerAppealPath = '/api/user/sanctum/exchanges/' . $exchangeId
+            . '/dispute/evidence/' . $evidence->getKey()
+            . '/attestations/' . $attestationId . '/appeals';
+
+        $buyerAppeal = $this->actingAs($buyer, 'api')
+            ->postJson($buyerAppealPath, [
+                'reason_code' => 'methodology',
+                'statement' => 'The review method did not account for a material chain-of-custody record.',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.appeal.evidence_sha256', $evidence->sha256);
+
+        $buyerAppealId = (int) $buyerAppeal->json('data.appeal.id');
+
+        $this->actingAs($buyer, 'api')
+            ->postJson($buyerAppealPath, [
+                'reason_code' => 'methodology',
+                'statement' => 'A duplicate appeal from the same participant must be rejected.',
+            ])
+            ->assertStatus(409)
+            ->assertJsonPath('error.code', 'appeal_already_exists');
+
+        $merchantAppealPath = '/merchant-api/merchant/sanctum/exchanges/' . $exchangeId
+            . '/dispute/evidence/' . $evidence->getKey()
+            . '/attestations/' . $attestationId . '/appeals';
+
+        $this->actingAs($merchant, 'merchant_api')
+            ->postJson($merchantAppealPath, [
+                'reason_code' => 'factual_error',
+                'statement' => 'The attestation overlooked the merchant dispatch record attached to the exchange.',
+            ])
+            ->assertCreated();
+
+        $this->actingAs($outsider, 'api')
+            ->postJson($buyerAppealPath, [
+                'reason_code' => 'other',
+                'statement' => 'An unrelated account must not submit an appeal on this exchange.',
+            ])
+            ->assertForbidden();
+
+        $this->assertSame(2, SanctumScanAttestationAppeal::query()->count());
+
+        $decision = $manager->adjudicateAppeal(
+            $buyerAppealId,
+            $adminId,
+            'correction_recommended',
+            'The appeal identifies a material record that should be considered in a separate verifier correction process.'
+        );
+        $this->assertInstanceOf(SanctumScanAttestationAppealDecision::class, $decision);
+        $this->assertSame('correction_recommended', $decision->outcome);
+        $this->assertSame('corroborated', $attestation->fresh()->outcome);
+        $this->assertSame($evidence->sha256, $attestation->fresh()->evidence_sha256);
+        $this->assertSame('accepted', SanctumScanExchange::query()->findOrFail($exchangeId)->status);
+        $this->assertSame('open', SanctumScanExchangeDispute::query()->firstOrFail()->status);
+        $this->assertTrue(SanctumScanExchangeEvent::query()
+            ->where('event_type', 'external_verifier_attestation_appealed')
+            ->exists());
+        $this->assertTrue(SanctumScanExchangeEvent::query()
+            ->where('event_type', 'external_verifier_appeal_reviewed')
+            ->exists());
+
+        $this->assertSame(
+            'appeal_already_decided',
+            $manager->adjudicateAppeal(
+                $buyerAppealId,
+                $adminId,
+                'dismissed',
+                'The system must not permit a second decision on the same appeal.'
+            )
+        );
+
+        try {
+            $decision->update(['outcome' => 'dismissed']);
+            $this->fail('Appeal decisions must be immutable.');
+        } catch (\LogicException $exception) {
+            $this->assertSame('Attestation appeal decisions are immutable.', $exception->getMessage());
+        }
+
+        $this->assertSame(1, SanctumScanAttestationAppealDecision::query()->count());
+        $this->assertTrue(SanctumScanVerifierRegistryEvent::query()
+            ->where('event_type', 'attestation_appeal_decided')
+            ->exists());
+    }
+
     public function test_suspending_an_institution_revokes_its_active_evidence_mandates(): void
     {
         Storage::fake('local');
