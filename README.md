@@ -1117,13 +1117,13 @@ Contributors should consult the repository's contribution guidelines, security p
 - Versioned opaque references using 256-bit random tokens.
 - SHA-256 hashes stored in the database.
 - Expiry and revocation support.
-- Public resolution endpoint: \`GET /api/sanctum/v1/scan/{reference}\`.
+- Public resolution endpoint: `GET /api/sanctum/v1/scan/{reference}`.
 - Uniform not-found responses for invalid, unknown, expired and revoked references.
 
 **Milestone 003 — Merchant identity and QR lifecycle**
 
 - Authenticated merchant reference issuance, listing and revocation.
-- Merchant ownership is derived from the \`merchant_api\` authentication guard.
+- Merchant ownership is derived from the `merchant_api` authentication guard.
 - Issuance and revocation record actor guard and ID.
 - QR codes encode the public scan URL as an SVG data URI.
 - Public resolution uses the current business name and exposes only the merchant handle.
@@ -1132,11 +1132,11 @@ Contributors should consult the repository's contribution guidelines, security p
 
 The merchant QR endpoints are:
 
-\`\`\`http
+```http
 GET    /merchant-api/merchant/sanctum/scan-references
 POST   /merchant-api/merchant/sanctum/scan-references
 DELETE /merchant-api/merchant/sanctum/scan-references/{referenceId}
-\`\`\`
+```
 
 Issuance returns the QR data URI and plaintext scan URL once. Listing never returns stored hashes or plaintext tokens. A lost QR must be replaced by issuing a new reference and revoking the old one.
 
