@@ -9,6 +9,8 @@ use LogicException;
 
 class SanctumScanExchangeDisputeEvidence extends Model
 {
+    protected $table = 'sanctum_scan_exchange_dispute_evidence';
+
     protected $guarded = ['id'];
 
     protected $casts = [
