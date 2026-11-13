@@ -25,4 +25,9 @@ class SanctumScanVerifierInstitution extends Model
     {
         return $this->hasMany(SanctumScanIndependentAttestation::class, 'institution_id');
     }
+
+    public function credentialReviews(): HasMany
+    {
+        return $this->hasMany(SanctumScanVerifierCredentialReview::class, 'institution_id');
+    }
 }

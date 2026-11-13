@@ -34,4 +34,14 @@ class SanctumScanVerifierMembership extends Model
     {
         return $this->hasMany(SanctumScanIndependentAttestation::class, 'membership_id');
     }
+
+    public function credentialReviews(): HasMany
+    {
+        return $this->hasMany(SanctumScanVerifierCredentialReview::class, 'membership_id');
+    }
+
+    public function conflictDeclarations(): HasMany
+    {
+        return $this->hasMany(SanctumScanVerifierConflictDeclaration::class, 'membership_id');
+    }
 }

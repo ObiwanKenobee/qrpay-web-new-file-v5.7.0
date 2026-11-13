@@ -31,7 +31,7 @@ class DisputeEvidenceManager
             ->firstOrFail();
 
         return SanctumScanExchangeDisputeEvidence::query()
-            ->with(['review', 'attestations.institution'])
+            ->with(['review', 'attestations.institution', 'attestations.appeals.decision'])
             ->where('dispute_id', $dispute->getKey())
             ->orderBy('id')
             ->get();

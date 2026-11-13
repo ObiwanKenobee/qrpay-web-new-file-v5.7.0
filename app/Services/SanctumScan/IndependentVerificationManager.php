@@ -4,10 +4,15 @@ namespace App\Services\SanctumScan;
 
 use App\Models\SanctumScanEvidenceVerificationMandate;
 use App\Models\SanctumScanExchangeDisputeEvidence;
+use App\Models\SanctumScanExchange;
 use App\Models\SanctumScanIndependentAttestation;
 use App\Models\SanctumScanVerifierInstitution;
 use App\Models\SanctumScanVerifierMembership;
 use App\Models\SanctumScanVerifierRegistryEvent;
+use App\Models\SanctumScanVerifierCredentialReview;
+use App\Models\SanctumScanVerifierConflictDeclaration;
+use App\Models\SanctumScanAttestationAppeal;
+use App\Models\SanctumScanAttestationAppealDecision;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -400,8 +405,16 @@ class IndependentVerificationManager
         int $evidenceId,
         int $userId
     ): StreamedResponse|string {
-        if (! $this->authorizedMandate($membershipId, $evidenceId, $userId)) {
+        $mandate = $this->authorizedMandate($membershipId, $evidenceId, $userId);
+
+        if (! $mandate) {
             return 'verification_not_authorized';
+        }
+
+        $readinessIssue = $this->verificationReadinessIssue($mandate, $membershipId, true);
+
+        if ($readinessIssue !== null) {
+            return $readinessIssue;
         }
 
         $evidence = SanctumScanExchangeDisputeEvidence::query()
@@ -474,6 +487,12 @@ class IndependentVerificationManager
                 return 'verifier_conflict_of_interest';
             }
 
+            $readinessIssue = $this->verificationReadinessIssue($mandate, $membershipId, true);
+
+            if ($readinessIssue !== null) {
+                return $readinessIssue;
+            }
+
             if (SanctumScanIndependentAttestation::query()
                 ->where('mandate_id', $mandate->getKey())
                 ->where('membership_id', $membershipId)
@@ -535,6 +554,449 @@ class IndependentVerificationManager
 
             return $attestation->fresh(['institution']);
         });
+    }
+
+
+    public function recordCredentialReview(
+        int $institutionId,
+        ?int $membershipId,
+        int $adminId,
+        string $scope,
+        string $credentialType,
+        string $issuerName,
+        string $credentialReference,
+        ?string $jurisdiction,
+        ?string $sourceUrl,
+        string $reviewMethod,
+        string $reviewStatus,
+        string $summary,
+        ?string $expiresAt
+    ): SanctumScanVerifierCredentialReview|string {
+        if (
+            ! in_array($reviewStatus, ['verified', 'rejected', 'unable_to_verify'], true) ||
+            ! in_array($reviewMethod, ['registry_lookup', 'issuer_confirmation', 'document_review', 'other'], true) ||
+            trim($credentialType) === '' ||
+            trim($issuerName) === '' ||
+            trim($credentialReference) === ''
+        ) {
+            return 'invalid_credential_review';
+        }
+
+        if ($membershipId === null && $scope !== 'institution_registration') {
+            return 'invalid_credential_scope';
+        }
+
+        if ($membershipId !== null && ! in_array($scope, self::SCOPES, true)) {
+            return 'invalid_credential_scope';
+        }
+
+        if (
+            $reviewStatus === 'verified' &&
+            $expiresAt !== null &&
+            \Illuminate\Support\Carbon::parse($expiresAt)->isPast()
+        ) {
+            return 'credential_expiry_invalid';
+        }
+
+        return DB::transaction(function () use (
+            $institutionId,
+            $membershipId,
+            $adminId,
+            $scope,
+            $credentialType,
+            $issuerName,
+            $credentialReference,
+            $jurisdiction,
+            $sourceUrl,
+            $reviewMethod,
+            $reviewStatus,
+            $summary,
+            $expiresAt
+        ) {
+            SanctumScanVerifierInstitution::query()
+                ->whereKey($institutionId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($membershipId !== null) {
+                $membership = SanctumScanVerifierMembership::query()
+                    ->whereKey($membershipId)
+                    ->where('institution_id', $institutionId)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $membership) {
+                    return 'credential_subject_mismatch';
+                }
+            }
+
+            $review = SanctumScanVerifierCredentialReview::create([
+                'institution_id' => $institutionId,
+                'membership_id' => $membershipId,
+                'credential_scope' => $scope,
+                'credential_type' => trim($credentialType),
+                'issuer_name' => trim($issuerName),
+                'credential_reference' => trim($credentialReference),
+                'jurisdiction' => $jurisdiction ? trim($jurisdiction) : null,
+                'source_url' => $sourceUrl,
+                'review_method' => $reviewMethod,
+                'review_status' => $reviewStatus,
+                'review_summary' => trim($summary),
+                'reviewed_by_admin_id' => $adminId,
+                'reviewed_at' => now(),
+                'expires_at' => $expiresAt,
+                'created_at' => now(),
+            ]);
+
+            $this->record(
+                'credential_review',
+                (int) $review->getKey(),
+                'credential_review_recorded',
+                'admin',
+                $adminId,
+                [
+                    'institution_id' => $institutionId,
+                    'membership_id' => $membershipId,
+                    'credential_scope' => $scope,
+                    'review_status' => $reviewStatus,
+                    'expires_at' => $expiresAt,
+                ]
+            );
+
+            return $review;
+        });
+    }
+
+    public function declareConflict(
+        int $membershipId,
+        int $evidenceId,
+        int $userId,
+        bool $hasConflict,
+        string $statement
+    ): SanctumScanVerifierConflictDeclaration|string {
+        return DB::transaction(function () use (
+            $membershipId,
+            $evidenceId,
+            $userId,
+            $hasConflict,
+            $statement
+        ) {
+            $mandate = $this->authorizedMandate($membershipId, $evidenceId, $userId, null, true);
+
+            if (! $mandate) {
+                return 'verification_not_authorized';
+            }
+
+            $credentialIssue = $this->verificationCredentialIssue($mandate, $membershipId);
+
+            if ($credentialIssue !== null) {
+                return $credentialIssue;
+            }
+
+            $evidence = SanctumScanExchangeDisputeEvidence::query()
+                ->with('dispute.exchange')
+                ->whereKey($evidenceId)
+                ->firstOrFail();
+            $exchange = $evidence->dispute?->exchange;
+
+            if (
+                ($exchange && (int) $exchange->buyer_user_id === $userId) ||
+                ($evidence->submitted_by_guard === 'api' && (int) $evidence->submitted_by_id === $userId)
+            ) {
+                return 'verifier_conflict_of_interest';
+            }
+
+            $previous = SanctumScanVerifierConflictDeclaration::query()
+                ->where('membership_id', $membershipId)
+                ->where('mandate_id', $mandate->getKey())
+                ->orderByDesc('id')
+                ->lockForUpdate()
+                ->first();
+
+            if ($previous && $previous->has_conflict) {
+                return 'verifier_conflict_of_interest';
+            }
+
+            if ($previous && ! $hasConflict) {
+                return 'conflict_declaration_already_recorded';
+            }
+
+            $declaration = SanctumScanVerifierConflictDeclaration::create([
+                'membership_id' => $membershipId,
+                'mandate_id' => $mandate->getKey(),
+                'verifier_user_id' => $userId,
+                'has_conflict' => $hasConflict,
+                'disclosure_statement' => trim($statement),
+                'declared_at' => now(),
+                'created_at' => now(),
+            ]);
+
+            $this->record(
+                'conflict_declaration',
+                (int) $declaration->getKey(),
+                'conflict_declaration_recorded',
+                'api',
+                $userId,
+                [
+                    'membership_id' => $membershipId,
+                    'mandate_id' => $mandate->getKey(),
+                    'evidence_id' => $evidenceId,
+                    'has_conflict' => $hasConflict,
+                ]
+            );
+
+            return $declaration;
+        });
+    }
+
+    public function lodgeAppeal(
+        int $exchangeId,
+        int $evidenceId,
+        int $attestationId,
+        string $actorGuard,
+        int $actorId,
+        string $reasonCode,
+        string $statement
+    ): SanctumScanAttestationAppeal|string {
+        if (! in_array($actorGuard, ['api', 'merchant_api'], true)) {
+            return 'appeal_not_authorized';
+        }
+
+        return DB::transaction(function () use (
+            $exchangeId,
+            $evidenceId,
+            $attestationId,
+            $actorGuard,
+            $actorId,
+            $reasonCode,
+            $statement
+        ) {
+            $attestation = SanctumScanIndependentAttestation::query()
+                ->with('evidence.dispute.exchange')
+                ->whereKey($attestationId)
+                ->where('evidence_id', $evidenceId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $evidence = $attestation->evidence;
+            $exchange = $evidence?->dispute?->exchange;
+
+            if ($exchange) {
+                $exchange = SanctumScanExchange::query()
+                    ->whereKey($exchange->getKey())
+                    ->lockForUpdate()
+                    ->firstOrFail();
+            }
+
+            if (! $exchange || (int) $exchange->getKey() !== $exchangeId) {
+                return 'appeal_not_found';
+            }
+
+            $isParticipant = (
+                $actorGuard === 'api' &&
+                (int) $exchange->buyer_user_id === $actorId
+            ) || (
+                $actorGuard === 'merchant_api' &&
+                (int) $exchange->merchant_id === $actorId
+            );
+
+            if (! $isParticipant) {
+                return 'appeal_not_authorized';
+            }
+
+            if ($attestation->evidence_sha256 !== $evidence->sha256) {
+                return 'appeal_evidence_mismatch';
+            }
+
+            $existing = SanctumScanAttestationAppeal::query()
+                ->where('attestation_id', $attestationId)
+                ->where('appellant_guard', $actorGuard)
+                ->where('appellant_id', $actorId)
+                ->first();
+
+            if ($existing) {
+                return 'appeal_already_exists';
+            }
+
+            $appeal = SanctumScanAttestationAppeal::create([
+                'attestation_id' => $attestationId,
+                'evidence_id' => $evidenceId,
+                'exchange_id' => $exchangeId,
+                'appellant_guard' => $actorGuard,
+                'appellant_id' => $actorId,
+                'evidence_sha256' => $attestation->evidence_sha256,
+                'reason_code' => $reasonCode,
+                'statement' => trim($statement),
+                'submitted_at' => now(),
+                'created_at' => now(),
+            ]);
+
+            $this->record(
+                'appeal',
+                (int) $appeal->getKey(),
+                'attestation_appeal_submitted',
+                $actorGuard,
+                $actorId,
+                [
+                    'attestation_id' => $attestationId,
+                    'evidence_id' => $evidenceId,
+                    'exchange_id' => $exchangeId,
+                    'evidence_sha256' => $attestation->evidence_sha256,
+                    'reason_code' => $reasonCode,
+                ]
+            );
+
+            $this->events->record(
+                $exchange,
+                'external_verifier_attestation_appealed',
+                'An exchange participant submitted an appeal concerning an independent attestation.',
+                $actorGuard,
+                $actorId,
+                'appeal_submitted',
+                [
+                    'appeal_id' => $appeal->getKey(),
+                    'attestation_id' => $attestationId,
+                    'evidence_id' => $evidenceId,
+                    'evidence_sha256' => $attestation->evidence_sha256,
+                    'reason_code' => $reasonCode,
+                ]
+            );
+
+            return $appeal->fresh(['attestation.institution', 'decision']);
+        });
+    }
+
+    public function adjudicateAppeal(
+        int $appealId,
+        int $adminId,
+        string $outcome,
+        string $summary
+    ): SanctumScanAttestationAppealDecision|string {
+        if (! in_array($outcome, ['upheld', 'overturned', 'correction_recommended', 'dismissed'], true)) {
+            return 'invalid_appeal_decision';
+        }
+
+        return DB::transaction(function () use ($appealId, $adminId, $outcome, $summary) {
+            $appeal = SanctumScanAttestationAppeal::query()
+                ->with(['exchange', 'attestation'])
+                ->whereKey($appealId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (SanctumScanAttestationAppealDecision::query()->where('appeal_id', $appealId)->exists()) {
+                return 'appeal_already_decided';
+            }
+
+            $decision = SanctumScanAttestationAppealDecision::create([
+                'appeal_id' => $appealId,
+                'outcome' => $outcome,
+                'decision_summary' => trim($summary),
+                'reviewed_by_admin_id' => $adminId,
+                'decided_at' => now(),
+                'created_at' => now(),
+            ]);
+
+            $this->record(
+                'appeal',
+                $appealId,
+                'attestation_appeal_decided',
+                'admin',
+                $adminId,
+                [
+                    'decision_id' => $decision->getKey(),
+                    'outcome' => $outcome,
+                    'attestation_id' => $appeal->attestation_id,
+                    'evidence_id' => $appeal->evidence_id,
+                    'evidence_sha256' => $appeal->evidence_sha256,
+                ]
+            );
+
+            if ($appeal->exchange) {
+                $this->events->record(
+                    $appeal->exchange,
+                    'external_verifier_appeal_reviewed',
+                    'A platform administrator recorded a process finding for an independent-attestation appeal.',
+                    'admin',
+                    $adminId,
+                    'appeal_' . $outcome,
+                    [
+                        'appeal_id' => $appealId,
+                        'decision_id' => $decision->getKey(),
+                        'attestation_id' => $appeal->attestation_id,
+                        'evidence_id' => $appeal->evidence_id,
+                        'evidence_sha256' => $appeal->evidence_sha256,
+                        'outcome' => $outcome,
+                    ]
+                );
+            }
+
+            return $decision->fresh(['appeal']);
+        });
+    }
+
+    private function verificationReadinessIssue(
+        SanctumScanEvidenceVerificationMandate $mandate,
+        int $membershipId,
+        bool $requireConflictDeclaration
+    ): ?string {
+        $credentialIssue = $this->verificationCredentialIssue($mandate, $membershipId);
+
+        if ($credentialIssue !== null) {
+            return $credentialIssue;
+        }
+
+        if (! $requireConflictDeclaration) {
+            return null;
+        }
+
+        $declaration = SanctumScanVerifierConflictDeclaration::query()
+            ->where('membership_id', $membershipId)
+            ->where('mandate_id', $mandate->getKey())
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $declaration) {
+            return 'conflict_declaration_required';
+        }
+
+        return $declaration->has_conflict ? 'verifier_conflict_of_interest' : null;
+    }
+
+    private function verificationCredentialIssue(
+        SanctumScanEvidenceVerificationMandate $mandate,
+        int $membershipId
+    ): ?string {
+        $institutionReview = SanctumScanVerifierCredentialReview::query()
+            ->where('institution_id', $mandate->institution_id)
+            ->whereNull('membership_id')
+            ->where('credential_scope', 'institution_registration')
+            ->orderByDesc('id')
+            ->first();
+
+        if (
+            ! $institutionReview ||
+            $institutionReview->review_status !== 'verified' ||
+            ($institutionReview->expires_at && $institutionReview->expires_at->isPast())
+        ) {
+            return 'institution_credential_unverified';
+        }
+
+        $membershipReview = SanctumScanVerifierCredentialReview::query()
+            ->where('institution_id', $mandate->institution_id)
+            ->where('membership_id', $membershipId)
+            ->where('credential_scope', $mandate->verification_scope)
+            ->orderByDesc('id')
+            ->first();
+
+        if (
+            ! $membershipReview ||
+            $membershipReview->review_status !== 'verified' ||
+            ($membershipReview->expires_at && $membershipReview->expires_at->isPast())
+        ) {
+            return 'verifier_credential_unverified';
+        }
+
+        return null;
     }
 
     private function authorizedMandate(

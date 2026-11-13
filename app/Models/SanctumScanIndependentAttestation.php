@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use LogicException;
 
 class SanctumScanIndependentAttestation extends Model
@@ -58,5 +59,10 @@ class SanctumScanIndependentAttestation extends Model
     public function mandate(): BelongsTo
     {
         return $this->belongsTo(SanctumScanEvidenceVerificationMandate::class, 'mandate_id');
+    }
+
+    public function appeals(): HasMany
+    {
+        return $this->hasMany(SanctumScanAttestationAppeal::class, 'attestation_id');
     }
 }

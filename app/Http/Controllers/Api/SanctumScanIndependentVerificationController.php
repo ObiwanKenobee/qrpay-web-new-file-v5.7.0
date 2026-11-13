@@ -121,6 +121,45 @@ class SanctumScanIndependentVerificationController extends Controller
         ], 201);
     }
 
+    public function declareConflict(
+        Request $request,
+        int $membershipId,
+        int $evidenceId,
+        IndependentVerificationManager $manager
+    ): JsonResponse {
+        $user = $request->user('api');
+        abort_unless($user, 401);
+
+        $validated = $request->validate([
+            'has_conflict' => 'required|boolean',
+            'disclosure_statement' => 'required|string|min:20|max:2000',
+        ]);
+
+        $result = $manager->declareConflict(
+            $membershipId,
+            $evidenceId,
+            (int) $user->getKey(),
+            (bool) $validated['has_conflict'],
+            $validated['disclosure_statement']
+        );
+
+        if (is_string($result)) {
+            return $this->error($result);
+        }
+
+        return response()->json([
+            'data' => [
+                'conflict_declaration' => [
+                    'id' => $result->getKey(),
+                    'membership_id' => $result->membership_id,
+                    'mandate_id' => $result->mandate_id,
+                    'has_conflict' => $result->has_conflict,
+                    'declared_at' => $result->declared_at?->toIso8601String(),
+                ],
+            ],
+        ], 201);
+    }
+
     private function respond(
         Request $request,
         int $membershipId,
@@ -164,6 +203,14 @@ class SanctumScanIndependentVerificationController extends Controller
             'verifier_conflict_of_interest' => [409, 'A dispute participant or evidence submitter cannot independently attest to this evidence.'],
             'attestation_already_recorded' => [409, 'This verifier membership has already attested to this evidence under the mandate.'],
             'invalid_attestation' => [422, 'The attestation scope, method or outcome is not supported.'],
+            'institution_credential_unverified' => [403, 'The institution registration credential has not been verified or is no longer current.'],
+            'verifier_credential_unverified' => [403, 'The verifier does not have a current credential review for this scope.'],
+            'conflict_declaration_required' => [403, 'A current conflict-of-interest declaration is required before evidence access or attestation.'],
+            'conflict_declaration_already_recorded' => [409, 'A no-conflict declaration has already been recorded for this mandate.'],
+            'credential_expiry_invalid' => [422, 'A verified credential review cannot expire in the past.'],
+            'invalid_credential_review' => [422, 'The credential review status or method is not supported.'],
+            'invalid_credential_scope' => [422, 'The credential scope is not valid for the selected subject.'],
+            'credential_subject_mismatch' => [422, 'The verifier membership does not belong to this institution.'],
             default => [409, 'The independent verification operation could not be completed.'],
         };
 
