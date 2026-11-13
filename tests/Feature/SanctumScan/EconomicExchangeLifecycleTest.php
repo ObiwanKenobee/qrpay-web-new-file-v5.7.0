@@ -699,6 +699,36 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->assertSame('open', SanctumScanExchangeDispute::query()->firstOrFail()->status);
     }
 
+    public function test_initiator_can_withdraw_before_counterparty_response(): void
+    {
+        $merchant = $this->makeMerchant('dispute-withdraw-clean-seller', 'Dispute Withdraw Clean Seller');
+        $buyer = $this->makeBuyer('dispute-withdraw-clean-buyer');
+        $resource = $this->makeResource($merchant);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+        $exchangeId = $offer['id'];
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->assertOk();
+
+        $this->actingAs($merchant, 'merchant_api')
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute', [
+                'category' => 'other',
+                'statement' => 'Opening statement that the merchant later withdraws.',
+            ])
+            ->assertCreated();
+
+        $this->actingAs($merchant, 'merchant_api')
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute/withdraw')
+            ->assertOk()
+            ->assertJsonPath('data.dispute.status', 'withdrawn');
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute')
+            ->assertStatus(409)
+            ->assertJsonPath('error.code', 'dispute_exists');
+    }
+
     public function test_dispute_messages_are_immutable(): void
     {
         $merchant = $this->makeMerchant('dispute-immutable-seller', 'Dispute Immutable Seller');
@@ -723,7 +753,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         try {
             $message->update(['body' => 'Edited statement']);
             $this->fail('Dispute messages should be immutable.');
-        } catch (\\LogicException $exception) {
+        } catch (\LogicException $exception) {
             $this->assertSame(
                 'Sanctum Scan dispute messages are immutable.',
                 $exception->getMessage()
