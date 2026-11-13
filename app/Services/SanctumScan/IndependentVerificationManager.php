@@ -638,8 +638,21 @@ class IndependentVerificationManager
                 ->where('user_id', $userId)
                 ->first();
 
-            if (! $membership) {
+            if (
+                ! $membership ||
+                (int) $membership->institution_id !== (int) $attestation->institution_id
+            ) {
                 return 'revision_not_authorized';
+            }
+
+            $latest = SanctumScanAttestationRevision::query()
+                ->where('attestation_id', $attestationId)
+                ->orderByDesc('version_number')
+                ->lockForUpdate()
+                ->first();
+
+            if ($latest && $latest->revision_action === 'revoked') {
+                return 'attestation_already_revoked';
             }
 
             if ($action === 'corrected') {
@@ -685,16 +698,6 @@ class IndependentVerificationManager
 
             if (! $attestation->evidence || $attestation->evidence->sha256 !== $attestation->evidence_sha256) {
                 return 'attestation_evidence_mismatch';
-            }
-
-            $latest = SanctumScanAttestationRevision::query()
-                ->where('attestation_id', $attestationId)
-                ->orderByDesc('version_number')
-                ->lockForUpdate()
-                ->first();
-
-            if ($latest && $latest->revision_action === 'revoked') {
-                return 'attestation_already_revoked';
             }
 
             $effective = [
