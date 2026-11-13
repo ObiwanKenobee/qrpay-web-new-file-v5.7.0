@@ -12,11 +12,11 @@ class SanctumScanExchangePaymentEvidence extends Model
 
     protected static function booted(): void
     {
-        static::updating(function () {
+        static::updating(function (self $evidence) {
             throw new LogicException('Submitted payment evidence is immutable and requires a separate verification record.');
         });
 
-        static::deleting(function () {
+        static::deleting(function (self $evidence) {
             throw new LogicException('Submitted payment evidence cannot be deleted.');
         });
     }
