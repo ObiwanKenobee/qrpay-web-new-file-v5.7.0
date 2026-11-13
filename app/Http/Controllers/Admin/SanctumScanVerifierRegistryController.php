@@ -235,6 +235,7 @@ class SanctumScanVerifierRegistryController extends Controller
             'membership_already_exists' => [409, 'A membership or invitation already exists for this institution and user.'],
             'membership_revoked' => [409, 'A revoked membership cannot be reactivated.'],
             'invitation_requires_user_acceptance' => [409, 'A verifier must accept their own invitation before receiving active membership.'],
+            'membership_status_change_invalid' => [409, 'Only an active verifier membership can be suspended.'],
             'mandate_already_active' => [409, 'This institution already has an active mandate for the evidence.'],
             'mandate_unavailable' => [409, 'The mandate is no longer active.'],
             'mandate_expiry_invalid' => [422, 'The mandate expiry must be in the future.'],
