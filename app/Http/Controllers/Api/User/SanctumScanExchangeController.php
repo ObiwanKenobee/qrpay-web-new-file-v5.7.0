@@ -61,6 +61,7 @@ class SanctumScanExchangeController extends Controller
 
             $resourceIsPublished = SanctumScanResource::query()
                 ->whereKey($exchange->resource_id)
+                ->where('merchant_id', $exchange->merchant_id)
                 ->where('status', 'published')
                 ->exists();
 
@@ -228,8 +229,8 @@ class SanctumScanExchangeController extends Controller
     ): JsonResponse {
         $validator = Validator::make($request->all(), [
             'rail' => 'required|in:mpesa,bank_transfer,cash,card,other',
-            'reference' => 'required|string|max:120',
-            'amount' => 'required|numeric|gt:0',
+            'reference' => 'required|string|max:120|not_regex:/\A\s*\z/',
+            'amount' => ['required', 'numeric', 'gt:0', 'regex:/\A\d{1,20}(?:\.\d{1,8})?\z/'],
             'currency' => ['required', 'string', 'size:3', 'regex:/\A[A-Z]{3}\z/'],
         ]);
 
