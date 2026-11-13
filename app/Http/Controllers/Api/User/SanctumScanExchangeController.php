@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\User;
 use App\Http\Controllers\Controller;
 use App\Models\SanctumScanExchange;
 use App\Models\SanctumScanExchangePaymentEvidence;
+use App\Models\Merchants\Merchant;
+use App\Models\SanctumScanResource;
 use App\Models\User;
 use App\Services\SanctumScan\ExchangeEventRecorder;
 use Illuminate\Http\JsonResponse;
@@ -51,6 +53,35 @@ class SanctumScanExchangeController extends Controller
                 return 'expired';
             }
 
+            $merchantIsActive = Merchant::query()
+                ->whereKey($exchange->merchant_id)
+                ->where('status', true)
+                ->whereNull('deleted_at')
+                ->exists();
+
+            $resourceIsPublished = SanctumScanResource::query()
+                ->whereKey($exchange->resource_id)
+                ->where('status', 'published')
+                ->exists();
+
+            if (! $merchantIsActive || ! $resourceIsPublished) {
+                $exchange->forceFill([
+                    'status' => 'cancelled',
+                    'cancelled_at' => now(),
+                ])->save();
+
+                $events->record(
+                    $exchange,
+                    'offer_withdrawn',
+                    'The offer was withdrawn because the merchant or resource is no longer active.',
+                    'system',
+                    0,
+                    'system_recorded'
+                );
+
+                return 'withdrawn';
+            }
+
             if ($exchange->status !== 'offered') {
                 return null;
             }
@@ -74,6 +105,10 @@ class SanctumScanExchangeController extends Controller
 
         if ($exchange === 'expired') {
             return $this->stateError('offer_expired', 'This offer has expired.');
+        }
+
+        if ($exchange === 'withdrawn') {
+            return $this->stateError('offer_withdrawn', 'The merchant or resource is no longer active, so this offer cannot be accepted.');
         }
 
         if (! $exchange) {
