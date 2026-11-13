@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\SanctumScanExchangeDisputeEvidence;
 use App\Services\SanctumScan\DisputeEvidenceManager;
+use App\Services\SanctumScan\IndependentVerificationManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -78,6 +79,49 @@ class SanctumScanDisputeEvidenceController extends Controller
         return is_string($result) ? $this->error($result) : $result;
     }
 
+    public function appealAttestation(
+        Request $request,
+        int $exchangeId,
+        int $evidenceId,
+        int $attestationId,
+        IndependentVerificationManager $manager
+    ): JsonResponse {
+        [$guard, $actorId] = $this->actor($request);
+
+        $validated = $request->validate([
+            'reason_code' => 'required|in:scope_disagreement,evidence_integrity,undisclosed_conflict,factual_error,methodology,other',
+            'statement' => 'required|string|min:20|max:2000',
+        ]);
+
+        $result = $manager->lodgeAppeal(
+            $exchangeId,
+            $evidenceId,
+            $attestationId,
+            $guard,
+            $actorId,
+            $validated['reason_code'],
+            $validated['statement']
+        );
+
+        if (is_string($result)) {
+            return $this->error($result);
+        }
+
+        return response()->json([
+            'data' => [
+                'appeal' => [
+                    'id' => $result->getKey(),
+                    'attestation_id' => $result->attestation_id,
+                    'evidence_id' => $result->evidence_id,
+                    'reason_code' => $result->reason_code,
+                    'evidence_sha256' => $result->evidence_sha256,
+                    'submitted_at' => $result->submitted_at?->toIso8601String(),
+                    'status' => $result->decision ? 'decided' : 'under_review',
+                ],
+            ],
+        ], 201);
+    }
+
     private function actor(Request $request): array
     {
         $merchant = $request->user('merchant_api');
@@ -102,6 +146,10 @@ class SanctumScanDisputeEvidenceController extends Controller
             'unsupported_file_type' => [422, 'Only PDF, JPEG and PNG evidence files are accepted.'],
             'file_unreadable' => [422, 'The uploaded file could not be read.'],
             'storage_failed' => [503, 'The evidence file could not be stored.'],
+            'appeal_not_authorized' => [403, 'Only a buyer or merchant on the exchange can appeal its evidence attestation.'],
+            'appeal_not_found' => [404, 'The attestation does not belong to this exchange evidence item.'],
+            'appeal_already_exists' => [409, 'This participant has already appealed this attestation.'],
+            'appeal_evidence_mismatch' => [409, 'The attestation is not bound to the current evidence digest.'],
             default => [409, 'The evidence operation could not be completed.'],
         };
 
