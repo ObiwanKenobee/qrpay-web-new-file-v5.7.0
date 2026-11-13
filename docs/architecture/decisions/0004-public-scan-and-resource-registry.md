@@ -10,14 +10,14 @@ Milestone 002 established a machine-readable opaque reference resolver. Mileston
 
 ## Decision
 
-1. Add a public mobile-first web route at \`/scan/{reference}\` while preserving the JSON API resolver.
-2. Share resolution logic between the public web page and machine API through \`ScanReferenceResolver\`.
-3. Introduce a merchant-owned economic resource registry for \`product\` and \`agricultural_batch\`.
+1. Add a public mobile-first web route at `/scan/{reference}` while preserving the JSON API resolver.
+2. Share resolution logic between the public web page and machine API through `ScanReferenceResolver`.
+3. Introduce a merchant-owned economic resource registry for `product` and `agricultural_batch`.
 4. Require the authenticated merchant guard to create, list, rotate and archive resources. Resource ownership comes from the authenticated principal, never request input.
 5. Resource QR payloads contain only an opaque public scan URL.
 6. Public resource documents include display name, description, category, merchant public handle, and carefully selected batch metadata.
-7. Quantity and unit are retained for merchant-side operations but are not published by this first public profile.
-8. Record provenance statements as append-only events with explicit \`merchant_declared\` status.
+7. Quantity and unit are retained for merchant-side operations but are not published by this first public profile. The QR expiry window is stored with the resource so reference rotation preserves that policy.
+8. Record provenance statements as append-only events with explicit `merchant_declared` status.
 9. Never label merchant-declared origin or product data as independently verified.
 10. Archiving a resource revokes active scan references. Rotating a scan reference revokes all active references for that resource before issuing a new one.
 11. Keep payment authorization, money movement, title/ownership proofs and independent quality certification outside this milestone.
@@ -51,15 +51,15 @@ Provenance events capture:
 
 Authenticated merchant endpoints:
 
-- \`GET /merchant-api/merchant/sanctum/resources\`
-- \`POST /merchant-api/merchant/sanctum/resources\`
-- \`POST /merchant-api/merchant/sanctum/resources/{resourceId}/scan-reference\`
-- \`DELETE /merchant-api/merchant/sanctum/resources/{resourceId}\`
+- `GET /merchant-api/merchant/sanctum/resources`
+- `POST /merchant-api/merchant/sanctum/resources`
+- `POST /merchant-api/merchant/sanctum/resources/{resourceId}/scan-reference`
+- `DELETE /merchant-api/merchant/sanctum/resources/{resourceId}`
 
 Public surfaces:
 
-- \`GET /scan/{reference}\` for human scanning.
-- \`GET /api/sanctum/v1/scan/{reference}\` for machine-readable resolution.
+- `GET /scan/{reference}` for human scanning.
+- `GET /api/sanctum/v1/scan/{reference}` for machine-readable resolution.
 
 ## Consequences
 
