@@ -231,6 +231,22 @@ class MerchantScanReferenceLifecycleTest extends TestCase
             ->assertJsonPath('error.code', 'scan_reference_unavailable');
     }
 
+    public function test_soft_deleted_merchant_profile_reference_is_not_resolvable(): void
+    {
+        $merchant = $this->makeMerchant('deleted-farm-shop', 'Deleted Business');
+        $issued = app(ScanReferenceIssuer::class)->issue(
+            'merchant',
+            (int) $merchant->getKey(),
+            'Deleted Business'
+        );
+
+        $merchant->forceFill(['deleted_at' => now()])->save();
+
+        $this->getJson('/api/sanctum/v1/scan/' . $issued['reference'])
+            ->assertNotFound()
+            ->assertJsonPath('error.code', 'scan_reference_unavailable');
+    }
+
     private function referenceFromUrl(string $url): string
     {
         $path = parse_url($url, PHP_URL_PATH);
