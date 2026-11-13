@@ -7,6 +7,7 @@ use App\Models\SanctumScanReference;
 use App\Services\SanctumScan\ScanReferenceIssuer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
@@ -92,38 +93,40 @@ class SanctumScanReferenceController extends Controller
             ? now()->addDays((int) $request->input('expires_in_days'))
             : null;
 
-        $issued = $issuer->issue(
-            'merchant',
-            (int) $merchant->getKey(),
-            $displayName,
-            null,
-            $expiresAt,
-            'merchant_api',
-            (int) $merchant->getKey()
-        );
+        return DB::transaction(function () use ($issuer, $merchant, $displayName, $expiresAt) {
+            $issued = $issuer->issue(
+                'merchant',
+                (int) $merchant->getKey(),
+                $displayName,
+                null,
+                $expiresAt,
+                'merchant_api',
+                (int) $merchant->getKey()
+            );
 
-        $scanUrl = route('sanctum.scan.resolve', [
-            'reference' => $issued['reference'],
-        ]);
+            $scanUrl = route('sanctum.scan.resolve', [
+                'reference' => $issued['reference'],
+            ]);
 
-        $svg = QrCode::format('svg')
-            ->size(260)
-            ->margin(1)
-            ->errorCorrection('M')
-            ->generate($scanUrl);
+            $svg = QrCode::format('svg')
+                ->size(260)
+                ->margin(1)
+                ->errorCorrection('M')
+                ->generate($scanUrl);
 
-        return response()->json([
-            'data' => [
-                'id' => $issued['record']->getKey(),
-                'type' => 'merchant',
-                'display_name' => $displayName,
-                'scan_url' => $scanUrl,
-                'qr_image_data_uri' => 'data:image/svg+xml;base64,' . base64_encode($svg),
-                'status' => $issued['record']->status,
-                'created_at' => $issued['record']->created_at?->toIso8601String(),
-                'expires_at' => $issued['record']->expires_at?->toIso8601String(),
-            ],
-        ], 201);
+            return response()->json([
+                'data' => [
+                    'id' => $issued['record']->getKey(),
+                    'type' => 'merchant',
+                    'display_name' => $displayName,
+                    'scan_url' => $scanUrl,
+                    'qr_image_data_uri' => 'data:image/svg+xml;base64,' . base64_encode($svg),
+                    'status' => $issued['record']->status,
+                    'created_at' => $issued['record']->created_at?->toIso8601String(),
+                    'expires_at' => $issued['record']->expires_at?->toIso8601String(),
+                ],
+            ], 201);
+        });
     }
 
     /**
