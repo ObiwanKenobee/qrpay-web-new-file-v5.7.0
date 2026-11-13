@@ -260,6 +260,43 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->assertSame(0, SanctumScanExchange::query()->count());
     }
 
+    public function test_merchant_cannot_issue_an_offer_to_an_unverified_buyer_account(): void
+    {
+        $merchant = $this->makeMerchant('unverified-buyer-seller', 'Unverified Buyer Seller');
+        $buyer = $this->makeBuyer('unverified-buyer');
+        $buyer->forceFill(['sms_verified' => false])->save();
+        $resource = $this->makeResource($merchant);
+
+        $this->actingAs($merchant, 'merchant_api')
+            ->postJson('/merchant-api/merchant/sanctum/exchanges', [
+                'resource_id' => $resource->getKey(),
+                'buyer_username' => $buyer->username,
+                'quantity' => '1',
+                'unit' => 'kg',
+                'amount' => '100',
+                'currency' => 'KES',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('error.code', 'buyer_unavailable');
+
+        $this->assertSame(0, SanctumScanExchange::query()->count());
+    }
+
+    public function test_merchant_cannot_dispatch_before_buyer_acceptance(): void
+    {
+        $merchant = $this->makeMerchant('preaccept-dispatch-seller', 'Preaccept Dispatch Seller');
+        $buyer = $this->makeBuyer('preaccept-dispatch-buyer');
+        $resource = $this->makeResource($merchant);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+
+        $this->actingAs($merchant, 'merchant_api')
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $offer['id'] . '/dispatch')
+            ->assertStatus(409)
+            ->assertJsonPath('error.code', 'invalid_exchange_state');
+
+        $this->assertSame('offered', SanctumScanExchange::findOrFail($offer['id'])->status);
+    }
+
     public function test_only_the_named_buyer_can_accept_or_view_an_offer(): void
     {
         $merchant = $this->makeMerchant('named-buyer-seller', 'Named Buyer Seller');
