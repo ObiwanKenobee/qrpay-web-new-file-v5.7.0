@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Sanctum;
 
 use App\Http\Controllers\Controller;
+use App\Models\Merchants\Merchant;
 use App\Models\SanctumScanReference;
 use Illuminate\Http\JsonResponse;
 
@@ -34,15 +35,41 @@ class ScanReferenceController extends Controller
             return $this->unavailable();
         }
 
+        $resource = [
+            'type' => $record->resource_type,
+            'display_name' => $record->display_name,
+            'description' => $record->display_description,
+        ];
+
+        if ($record->resource_type === 'merchant') {
+            $merchant = Merchant::query()
+                ->whereKey($record->resource_id)
+                ->where('status', true)
+                ->whereNull('deleted_at')
+                ->first();
+
+            if (! $merchant) {
+                return $this->unavailable();
+            }
+
+            $displayName = trim((string) ($merchant->business_name ?: $merchant->username));
+
+            if ($displayName !== '') {
+                $resource['display_name'] = $displayName;
+            }
+
+            // The public profile is intentionally limited to a business handle.
+            // Contact details, address, KYC files and wallet data are never returned.
+            $resource['profile'] = [
+                'handle' => $merchant->username,
+            ];
+        }
+
         return response()->json([
             'schema_version' => $record->schema_version,
             'type' => 'scan_resolution',
             'data' => [
-                'resource' => [
-                    'type' => $record->resource_type,
-                    'display_name' => $record->display_name,
-                    'description' => $record->display_description,
-                ],
+                'resource' => $resource,
                 'expires_at' => $record->expires_at?->toIso8601String(),
             ],
         ]);
@@ -50,7 +77,7 @@ class ScanReferenceController extends Controller
 
     private function unavailable(): JsonResponse
     {
-        // Keep invalid, unknown, expired and revoked references indistinguishable.
+        // Keep invalid, unknown, expired, revoked and inactive resources indistinguishable.
         return response()->json([
             'error' => [
                 'code' => 'scan_reference_unavailable',
