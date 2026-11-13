@@ -52,4 +52,9 @@ class SanctumScanExchange extends Model
     {
         return $this->hasOne(SanctumScanExchangePaymentEvidence::class, 'exchange_id');
     }
+
+    public function dispute(): HasOne
+    {
+        return $this->hasOne(SanctumScanExchangeDispute::class, 'exchange_id');
+    }
 }
