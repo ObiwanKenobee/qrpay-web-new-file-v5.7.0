@@ -122,6 +122,9 @@ Route::name('admin.')->group(function () {
                 Route::post('/{institutionId}/status', 'setInstitutionStatus')
                     ->whereNumber('institutionId')
                     ->name('status');
+                Route::post('/{institutionId}/credentials', 'recordCredentialReview')
+                    ->whereNumber('institutionId')
+                    ->name('credentials.review');
                 Route::post('/memberships/{membershipId}/status', 'setMembershipStatus')
                     ->whereNumber('membershipId')
                     ->name('members.status');
@@ -138,6 +141,12 @@ Route::name('admin.')->group(function () {
                     ->whereNumber('mandateId')
                     ->name('mandates.status');
             });
+
+        Route::get('sanctum/verifier-appeals', [SanctumScanVerifierRegistryController::class, 'appealsIndex'])
+            ->name('sanctum.verifier-appeals.index');
+        Route::post('sanctum/verifier-appeals/{appealId}/decision', [SanctumScanVerifierRegistryController::class, 'decideAppeal'])
+            ->whereNumber('appealId')
+            ->name('sanctum.verifier-appeals.decision');
 
         // Dashboard Section
         Route::controller(DashboardController::class)->group(function () {
