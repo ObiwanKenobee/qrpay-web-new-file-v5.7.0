@@ -1,6 +1,7 @@
 <?php
 
 use App\Constants\GlobalConst;
+use App\Http\Controllers\Api\Sanctum\ScanReferenceController;
 use App\Models\Admin\SetupKyc;
 use App\Http\Helpers\Api\Helpers;
 use Illuminate\Support\Facades\Route;
@@ -43,6 +44,13 @@ use App\Http\Controllers\Api\User\StrowalletVirtualCardController;
 | is assigned the "api" middleware group. Enjoy building your API!
 |
 */
+
+// Public, read-only Sanctum Scan reference resolution. Resolution never authorizes a payment.
+Route::prefix('sanctum/v1')->middleware('throttle:30,1')->group(function () {
+    Route::get('scan/{reference}', [ScanReferenceController::class, 'show'])
+        ->name('sanctum.scan.resolve');
+});
+
 
 Route::get('/clear-cache', function() {
     Artisan::call('cache:clear');
