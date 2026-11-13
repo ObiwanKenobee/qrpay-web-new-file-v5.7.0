@@ -265,7 +265,11 @@ class DisputeEvidenceManager
 
     public function fileIntegrityIsValid(SanctumScanExchangeDisputeEvidence $evidence): bool
     {
-        $disk = Storage::disk($evidence->storage_disk);
+        if ($evidence->storage_disk !== 'local') {
+            return false;
+        }
+
+        $disk = Storage::disk('local');
 
         if (! $disk->exists($evidence->storage_path)) {
             return false;
