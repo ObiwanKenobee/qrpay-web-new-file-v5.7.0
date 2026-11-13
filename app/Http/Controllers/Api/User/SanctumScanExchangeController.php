@@ -61,12 +61,14 @@ class SanctumScanExchangeController extends Controller
                 ->whereKey($exchange->merchant_id)
                 ->where('status', true)
                 ->whereNull('deleted_at')
+                ->lockForUpdate()
                 ->exists();
 
             $resourceIsPublished = SanctumScanResource::query()
                 ->whereKey($exchange->resource_id)
                 ->where('merchant_id', $exchange->merchant_id)
                 ->where('status', 'published')
+                ->lockForUpdate()
                 ->exists();
 
             if (! $merchantIsActive || ! $resourceIsPublished) {
