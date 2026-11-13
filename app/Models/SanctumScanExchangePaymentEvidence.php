@@ -4,10 +4,22 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use LogicException;
 
 class SanctumScanExchangePaymentEvidence extends Model
 {
     protected $guarded = ['id'];
+
+    protected static function booted(): void
+    {
+        static::updating(function () {
+            throw new LogicException('Submitted payment evidence is immutable and requires a separate verification record.');
+        });
+
+        static::deleting(function () {
+            throw new LogicException('Submitted payment evidence cannot be deleted.');
+        });
+    }
 
     protected $casts = [
         'exchange_id' => 'integer',
