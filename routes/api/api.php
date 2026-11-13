@@ -10,6 +10,7 @@ use App\Providers\Admin\BasicSettingsProvider;
 use App\Http\Controllers\Api\User\UserController;
 use App\Http\Controllers\Api\User\SanctumScanExchangeController;
 use App\Http\Controllers\Api\SanctumScanExchangeDisputeController;
+use App\Http\Controllers\Api\SanctumScanDisputeEvidenceController;
 use App\Http\Controllers\Api\AppSettingsController;
 use App\Http\Controllers\Api\User\BillPayController;
 use App\Http\Controllers\Api\User\AddMoneyController;
