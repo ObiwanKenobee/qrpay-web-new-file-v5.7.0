@@ -251,7 +251,7 @@ class IndependentVerificationManager
                 return $membership;
             }
 
-            if ($status === 'active' && $membership->status !== 'suspended') {
+            if ($status === 'active' && ($membership->status !== 'suspended' || ! $membership->accepted_at)) {
                 return 'invitation_requires_user_acceptance';
             }
 
@@ -285,7 +285,7 @@ class IndependentVerificationManager
             return 'invalid_verification_scope';
         }
 
-        if (now()->parse($expiresAt)->isPast()) {
+        if (\\Illuminate\\Support\\Carbon::parse($expiresAt)->isPast()) {
             return 'mandate_expiry_invalid';
         }
 
