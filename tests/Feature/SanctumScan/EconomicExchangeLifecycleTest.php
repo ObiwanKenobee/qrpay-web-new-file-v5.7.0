@@ -1265,10 +1265,24 @@ class EconomicExchangeLifecycleTest extends TestCase
         $revisionId = (int) $correction->json('data.revision.id');
         $revision = SanctumScanAttestationRevision::query()->findOrFail($revisionId);
 
+        $secondCorrection = $this->actingAs($verifier, 'api')
+            ->postJson($correctionPath, [
+                'verification_method' => 'direct_confirmation',
+                'outcome' => 'unable_to_assess',
+                'basis_summary' => 'The latest direct confirmation could not resolve the remaining quality observation uncertainty.',
+                'reason_code' => 'methodology_error',
+                'reason_summary' => 'A second review identified a limitation in the interpretation method used by the preceding revision.',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.revision.version_number', 3)
+            ->assertJsonPath('data.revision.previous_revision_id', $revisionId);
+
+        $secondRevisionId = (int) $secondCorrection->json('data.revision.id');
+
         $this->assertSame('corroborated', $attestation->fresh()->outcome);
         $this->assertSame('document_review', $attestation->fresh()->verification_method);
         $this->assertSame($evidence->sha256, $attestation->fresh()->evidence_sha256);
-        $this->assertSame(1, SanctumScanAttestationRevision::query()
+        $this->assertSame(2, SanctumScanAttestationRevision::query()
             ->where('attestation_id', $attestationId)
             ->count());
 
@@ -1276,10 +1290,12 @@ class EconomicExchangeLifecycleTest extends TestCase
             ->getJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence')
             ->assertOk()
             ->assertJsonPath('data.evidence.0.independent_attestations.0.outcome', 'corroborated')
-            ->assertJsonPath('data.evidence.0.independent_attestations.0.current.version_number', 2)
-            ->assertJsonPath('data.evidence.0.independent_attestations.0.current.outcome', 'not_corroborated')
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.current.version_number', 3)
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.current.outcome', 'unable_to_assess')
             ->assertJsonPath('data.evidence.0.independent_attestations.0.current.status', 'active')
-            ->assertJsonPath('data.evidence.0.independent_attestations.0.revisions.0.id', $revisionId);
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.revisions.0.id', $revisionId)
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.revisions.1.id', $secondRevisionId)
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.revisions.1.previous_revision_id', $revisionId);
 
         try {
             $revision->update(['outcome' => 'corroborated']);
