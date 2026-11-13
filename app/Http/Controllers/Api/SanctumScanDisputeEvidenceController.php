@@ -231,6 +231,37 @@ class SanctumScanDisputeEvidenceController extends Controller
                 'evidence_sha256' => $revision->evidence_sha256,
                 'recorded_at' => $revision->recorded_at?->toIso8601String(),
             ])->values()->all(),
+            'reassessment_of' => $attestation->reassessmentOf ? [
+                'id' => $attestation->reassessmentOf->getKey(),
+                'prior_attestation_id' => $attestation->reassessmentOf->prior_attestation_id,
+                'prior_revision_id' => $attestation->reassessmentOf->prior_revision_id,
+                'prior_version_number' => $attestation->reassessmentOf->prior_version_number,
+                'prior_status' => $attestation->reassessmentOf->prior_status,
+                'reason_summary' => $attestation->reassessmentOf->reason_summary,
+                'recorded_at' => $attestation->reassessmentOf->recorded_at?->toIso8601String(),
+            ] : null,
+            'reassessments' => $attestation->reassessments->map(function ($link) {
+                $reassessment = $link->reassessmentAttestation;
+                $latest = $reassessment?->revisions?->last();
+
+                return [
+                    'id' => $link->getKey(),
+                    'prior_revision_id' => $link->prior_revision_id,
+                    'prior_version_number' => $link->prior_version_number,
+                    'prior_status' => $link->prior_status,
+                    'reassessment_attestation_id' => $link->reassessment_attestation_id,
+                    'verification_scope' => $reassessment?->verification_scope,
+                    'verification_method' => $latest?->verification_method
+                        ?? $reassessment?->verification_method,
+                    'outcome' => $latest?->outcome ?? $reassessment?->outcome,
+                    'basis_summary' => $latest?->basis_summary ?? $reassessment?->basis_summary,
+                    'status' => $latest?->revision_action === 'revoked' ? 'revoked' : 'active',
+                    'institution_name' => $reassessment?->institution?->name,
+                    'reason_summary' => $link->reason_summary,
+                    'evidence_sha256' => $link->evidence_sha256,
+                    'recorded_at' => $link->recorded_at?->toIso8601String(),
+                ];
+            })->values()->all(),
             'appeals' => $attestation->appeals->map(fn ($appeal) => [
                 'id' => $appeal->getKey(),
                 'reason_code' => $appeal->reason_code,

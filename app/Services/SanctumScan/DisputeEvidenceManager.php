@@ -36,6 +36,9 @@ class DisputeEvidenceManager
                 'attestations.institution',
                 'attestations.appeals.decision',
                 'attestations.revisions',
+                'attestations.reassessmentOf',
+                'attestations.reassessments.reassessmentAttestation.institution',
+                'attestations.reassessments.reassessmentAttestation.revisions',
             ])
             ->where('dispute_id', $dispute->getKey())
             ->orderBy('id')
