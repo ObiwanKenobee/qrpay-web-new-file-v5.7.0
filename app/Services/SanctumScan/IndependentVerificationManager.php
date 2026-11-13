@@ -314,35 +314,29 @@ class IndependentVerificationManager
                 return 'institution_unavailable';
             }
 
-            $existing = SanctumScanEvidenceVerificationMandate::query()
+            $activeMandate = SanctumScanEvidenceVerificationMandate::query()
                 ->where('evidence_id', $evidenceId)
                 ->where('institution_id', $institutionId)
+                ->where('status', 'active')
+                ->where('expires_at', '>', now())
                 ->lockForUpdate()
                 ->first();
 
-            if ($existing && $existing->status === 'active' && $existing->expires_at->isFuture()) {
+            if ($activeMandate) {
                 return 'mandate_already_active';
             }
 
-            $attributes = [
+            // Each grant is a new record so prior attestations retain the exact mandate
+            // scope and expiry under which they were issued.
+            $mandate = SanctumScanEvidenceVerificationMandate::create([
+                'evidence_id' => $evidenceId,
+                'institution_id' => $institutionId,
                 'verification_scope' => $scope,
                 'mandate_reason' => trim($reason),
                 'status' => 'active',
                 'mandated_by_admin_id' => $adminId,
                 'expires_at' => $expiresAt,
-                'revoked_by_admin_id' => null,
-                'revoked_at' => null,
-            ];
-
-            if (! $existing) {
-                $mandate = SanctumScanEvidenceVerificationMandate::create($attributes + [
-                    'evidence_id' => $evidenceId,
-                    'institution_id' => $institutionId,
-                ]);
-            } else {
-                $mandate = $existing->forceFill($attributes);
-                $mandate->save();
-            }
+            ]);
 
             $this->record('mandate', (int) $mandate->getKey(), 'mandate_granted', 'admin', $adminId, [
                 'evidence_id' => $evidenceId,
