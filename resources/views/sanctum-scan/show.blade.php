@@ -98,7 +98,7 @@
         <div class="mark" aria-hidden="true">AS</div>
         <div>
             <div class="brand-name">ATLAS SANCTUM</div>
-            <div class="brand-sub">Sanctum Scan · Verified exchange infrastructure</div>
+            <div class="brand-sub">Sanctum Scan · Public economic records</div>
         </div>
     </header>
 
