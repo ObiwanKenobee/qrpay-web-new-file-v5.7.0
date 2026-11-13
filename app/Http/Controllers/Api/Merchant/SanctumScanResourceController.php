@@ -9,9 +9,9 @@ use App\Models\SanctumScanResource;
 use App\Services\SanctumScan\ScanReferenceIssuer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 class SanctumScanResourceController extends Controller
@@ -42,12 +42,23 @@ class SanctumScanResourceController extends Controller
 
     public function store(Request $request, ScanReferenceIssuer $issuer): JsonResponse
     {
+        $merchant = $request->user('merchant_api');
+        $resourceType = (string) $request->input('resource_type');
+
         $validator = Validator::make($request->all(), [
             'resource_type' => 'required|in:product,agricultural_batch',
             'display_name' => 'required|string|max:140',
             'description' => 'nullable|string|max:2000',
             'category' => 'required|string|max:100',
-            'reference_code' => 'nullable|string|max:80',
+            'reference_code' => [
+                'nullable',
+                'string',
+                'max:80',
+                Rule::unique('sanctum_scan_resources', 'reference_code')
+                    ->where(fn ($query) => $query
+                        ->where('merchant_id', $merchant->getKey())
+                        ->where('resource_type', $resourceType)),
+            ],
             'variety' => 'nullable|string|max:100|required_if:resource_type,agricultural_batch',
             'origin_label' => 'nullable|string|max:160',
             'occurred_on' => 'nullable|date|before_or_equal:today',
@@ -65,7 +76,6 @@ class SanctumScanResourceController extends Controller
             ], 422);
         }
 
-        $merchant = $request->user('merchant_api');
         $validated = $validator->validated();
         $expiresAt = ! empty($validated['expires_in_days'])
             ? now()->addDays((int) $validated['expires_in_days'])
@@ -88,6 +98,10 @@ class SanctumScanResourceController extends Controller
             ->firstOrFail();
 
         return DB::transaction(function () use ($merchant, $resource, $issuer) {
+            $expiresAt = $resource->scan_expires_in_days !== null
+                ? now()->addDays((int) $resource->scan_expires_in_days)
+                : null;
+
             SanctumScanReference::query()
                 ->where('resource_type', $resource->resource_type)
                 ->where('resource_id', $resource->getKey())
@@ -104,7 +118,7 @@ class SanctumScanResourceController extends Controller
                 (int) $resource->getKey(),
                 $resource->display_name,
                 $resource->description,
-                null,
+                $expiresAt,
                 'merchant_api',
                 (int) $merchant->getKey()
             );
@@ -181,6 +195,7 @@ class SanctumScanResourceController extends Controller
                 'occurred_on' => $validated['occurred_on'] ?? null,
                 'quantity' => $validated['quantity'] ?? null,
                 'unit' => $validated['unit'] ?? null,
+                'scan_expires_in_days' => $validated['expires_in_days'] ?? null,
                 'status' => 'published',
             ]);
 
@@ -200,9 +215,6 @@ class SanctumScanResourceController extends Controller
                     'event_type' => 'origin_declared',
                     'statement' => 'The merchant declared this as the resource origin. This claim has not been independently verified.',
                     'location_label' => trim($validated['origin_label']),
-                    'occurred_at' => ! empty($validated['occurred_on'])
-                        ? Carbon::parse($validated['occurred_on'])->startOfDay()
-                        : null,
                     'verification_status' => 'merchant_declared',
                     'recorded_by_guard' => 'merchant_api',
                     'recorded_by_id' => $merchant->getKey(),
