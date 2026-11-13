@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Artisan;
 use App\Providers\Admin\BasicSettingsProvider;
 use App\Http\Controllers\Api\User\UserController;
+use App\Http\Controllers\Api\User\SanctumScanExchangeController;
 use App\Http\Controllers\Api\AppSettingsController;
 use App\Http\Controllers\Api\User\BillPayController;
 use App\Http\Controllers\Api\User\AddMoneyController;
@@ -141,6 +142,27 @@ Route::prefix('user')->group(function(){
         //pusher
 
         Route::middleware(['CheckStatusApiUser','user.google.two.factor.api'])->group(function () {
+        Route::get('sanctum/exchanges', [SanctumScanExchangeController::class, 'index'])
+            ->name('api.user.sanctum.exchanges.index')
+            ->middleware('throttle:30,1');
+
+        Route::middleware(['user.pin.setup.guard', 'throttle:10,1'])->group(function () {
+            Route::post('sanctum/exchanges/{exchangeId}/accept', [SanctumScanExchangeController::class, 'accept'])
+                ->whereNumber('exchangeId')
+                ->name('api.user.sanctum.exchanges.accept');
+            Route::post('sanctum/exchanges/{exchangeId}/decline', [SanctumScanExchangeController::class, 'decline'])
+                ->whereNumber('exchangeId')
+                ->name('api.user.sanctum.exchanges.decline');
+            Route::post('sanctum/exchanges/{exchangeId}/receipt', [SanctumScanExchangeController::class, 'confirmReceipt'])
+                ->whereNumber('exchangeId')
+                ->name('api.user.sanctum.exchanges.receipt');
+        });
+
+        Route::post('sanctum/exchanges/{exchangeId}/payment-reference', [SanctumScanExchangeController::class, 'submitPaymentReference'])
+            ->whereNumber('exchangeId')
+            ->name('api.user.sanctum.exchanges.payment-reference')
+            ->middleware(['user.pin.setup.guard', 'api.kyc']);
+
             Route::get('dashboard', [UserController::class,'home']);
              Route::post('verify/pin', [UserController::class,'pinVerify'])->middleware(['user.pin.setup.guard']);
             Route::get('profile', [UserController::class,'profile']);
