@@ -14,7 +14,6 @@ class ScanReferenceResolutionTest extends TestCase
     {
         parent::setUp();
 
-        // Isolate this feature slice from the inherited application's legacy migrations.
         config([
             'database.default' => 'sqlite',
             'database.connections.sqlite.database' => ':memory:',
@@ -25,18 +24,20 @@ class ScanReferenceResolutionTest extends TestCase
         $migration = require base_path('database/migrations/2026_11_13_130000_create_sanctum_scan_references_table.php');
         $migration->up();
 
-        // The legacy maintenance middleware assumes a settings row exists.
-        // These tests cover the resolver, not that unrelated middleware.
+        $auditMigration = require base_path('database/migrations/2026_11_13_140000_add_audit_fields_to_sanctum_scan_references_table.php');
+        $auditMigration->up();
+
+        // This suite verifies public reference resolution, not legacy middleware.
         $this->withoutMiddleware();
     }
 
     public function test_it_resolves_an_active_reference_to_public_metadata_only(): void
     {
         $issued = app(ScanReferenceIssuer::class)->issue(
-            'merchant',
+            'product',
             845,
-            'Mosop Farm Supplies',
-            'Agricultural inputs and farm supplies.'
+            'Potato batch 24',
+            'Agricultural produce batch.'
         );
 
         $response = $this->getJson('/api/sanctum/v1/scan/' . $issued['reference']);
@@ -44,9 +45,9 @@ class ScanReferenceResolutionTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('schema_version', '1.0')
             ->assertJsonPath('type', 'scan_resolution')
-            ->assertJsonPath('data.resource.type', 'merchant')
-            ->assertJsonPath('data.resource.display_name', 'Mosop Farm Supplies')
-            ->assertJsonPath('data.resource.description', 'Agricultural inputs and farm supplies.')
+            ->assertJsonPath('data.resource.type', 'product')
+            ->assertJsonPath('data.resource.display_name', 'Potato batch 24')
+            ->assertJsonPath('data.resource.description', 'Agricultural produce batch.')
             ->assertJsonPath('data.expires_at', null);
 
         $this->assertArrayNotHasKey('id', $response->json('data.resource'));
