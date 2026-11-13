@@ -107,6 +107,11 @@ class MerchantScanReferenceLifecycleTest extends TestCase
         $this->assertSame($merchant->getKey(), $record->created_by_id);
         $this->assertSame(hash('sha256', $this->referenceFromUrl($scanUrl)), $record->reference_hash);
         $this->assertStringNotContainsString($merchant->email, $scanUrl);
+
+        $this->getJson($scanUrl)
+            ->assertOk()
+            ->assertJsonPath('data.resource.display_name', 'Mosop Farm Inputs')
+            ->assertJsonPath('data.resource.profile.handle', 'mosop-farm-inputs');
     }
 
     public function test_merchant_listing_is_scoped_to_the_authenticated_owner(): void
