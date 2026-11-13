@@ -158,6 +158,7 @@ class SanctumScanIndependentVerificationController extends Controller
         [$status, $message] = match ($code) {
             'invitation_unavailable' => [409, 'This invitation is no longer pending.'],
             'institution_unavailable' => [409, 'The verifier institution is not active.'],
+            'verifier_account_unavailable' => [403, 'The verifier account must remain active with verified email and phone.'],
             'verification_not_authorized' => [403, 'No active mandate authorizes this account to access this evidence.'],
             'evidence_integrity_failure' => [409, 'The stored evidence file is unavailable or its integrity check failed.'],
             'verifier_conflict_of_interest' => [409, 'A dispute participant or evidence submitter cannot independently attest to this evidence.'],
