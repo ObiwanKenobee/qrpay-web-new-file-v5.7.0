@@ -58,11 +58,11 @@ Unavailable response:
 
 ## Issuance and revocation
 
-The initial issuance interface is an internal Laravel service, not a public unauthenticated route. A future authenticated merchant or institutional workflow must add explicit authorization, audit attribution, consent and appropriate rate limits before exposing issuance through HTTP.
+Milestone 002 initially exposed issuance only through an internal Laravel service. Milestone 003 adds a merchant-owned issuance and revocation workflow under the authenticated `merchant_api` guard. It records actor attribution and returns an SVG QR containing the public scan URL. Other resource types remain internal until their own authorization and governance models are defined.
 
-The plaintext token is returned to the issuer once and must be delivered to the QR-generation workflow securely. The database stores only its SHA-256 hash.
+The plaintext token is returned once to the authorized issuer and must be delivered to the QR-generation workflow securely. The database stores only its SHA-256 hash. Merchant listing never returns plaintext references or hashes.
 
-Revocation is performed through the internal service and is immediately respected by resolution.
+Merchant revocation is owner-scoped and immediately respected by public resolution. See [ADR 0003](0003-merchant-scan-identity.md) for the merchant-specific lifecycle.
 
 ## Security boundaries
 
