@@ -1093,6 +1093,37 @@ class EconomicExchangeLifecycleTest extends TestCase
         ];
     }
 
+    public function test_verifier_account_must_remain_active_and_verified_when_accepting_an_invitation(): void
+    {
+        $verifier = $this->makeBuyer('unverified-verifier-account');
+        $adminId = $this->makeAdminForVerification('acceptance-eligibility');
+        $manager = app(IndependentVerificationManager::class);
+
+        $institution = $manager->registerInstitution($adminId, [
+            'name' => 'Acceptance Eligibility Institute',
+            'organization_type' => 'research_institute',
+            'country_code' => 'KE',
+        ]);
+        $membership = $manager->inviteMember(
+            (int) $institution->getKey(),
+            (int) $verifier->getKey(),
+            $adminId
+        );
+
+        $verifier->forceFill(['email_verified' => false])->save();
+
+        $this->assertSame(
+            'verifier_account_unavailable',
+            $manager->respondToInvitation(
+                (int) $membership->getKey(),
+                (int) $verifier->getKey(),
+                true
+            )
+        );
+        $this->assertSame('invited', $membership->fresh()->status);
+        $this->assertNull($membership->fresh()->accepted_at);
+    }
+
     public function test_independent_verifier_requires_user_acceptance_and_an_evidence_specific_mandate(): void
     {
         Storage::fake('local');
