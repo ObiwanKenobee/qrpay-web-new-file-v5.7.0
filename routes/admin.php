@@ -122,6 +122,9 @@ Route::name('admin.')->group(function () {
                 Route::post('/{institutionId}/status', 'setInstitutionStatus')
                     ->whereNumber('institutionId')
                     ->name('status');
+                Route::get('/{institutionId}/credentials', 'credentialReviews')
+                    ->whereNumber('institutionId')
+                    ->name('credentials.index');
                 Route::post('/{institutionId}/credentials', 'recordCredentialReview')
                     ->whereNumber('institutionId')
                     ->name('credentials.review');
