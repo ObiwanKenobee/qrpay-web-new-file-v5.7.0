@@ -19,7 +19,7 @@ return new class extends Migration
             $table->unsignedBigInteger('created_by_admin_id');
             $table->timestamps();
 
-            $table->foreign('created_by_admin_id')
+            $table->foreign('created_by_admin_id', 'sanctum_scan_inst_creator_fk')
                 ->references('id')
                 ->on('admins')
                 ->onDelete('restrict');
