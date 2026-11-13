@@ -157,6 +157,15 @@ class IndependentVerificationManager
                 return 'institution_unavailable';
             }
 
+            if ($accept && ! User::query()
+                ->whereKey($userId)
+                ->where('status', true)
+                ->where('email_verified', true)
+                ->where('sms_verified', true)
+                ->exists()) {
+                return 'verifier_account_unavailable';
+            }
+
             $membership->forceFill([
                 'status' => $accept ? 'active' : 'declined',
                 'accepted_at' => $accept ? now() : null,
