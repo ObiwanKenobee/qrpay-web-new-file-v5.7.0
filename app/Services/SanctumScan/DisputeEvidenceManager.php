@@ -328,7 +328,7 @@ class DisputeEvidenceManager
             ->get()
             ->map(fn ($message) => [
                 'id' => $message->getKey(),
-                'actor_type' => match ($message->sender_guard) {
+                'actor_type' => match ($message->recorded_by_guard) {
                     'api' => 'authenticated_user',
                     'merchant_api' => 'merchant_account',
                     'admin' => 'platform_administrator',
