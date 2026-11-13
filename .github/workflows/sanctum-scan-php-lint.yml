@@ -1,4 +1,4 @@
-name: Sanctum Scan PHP syntax
+name: Sanctum Scan PHP lint and feature tests
 
 on:
   pull_request:
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   php-lint:
-    name: Lint changed PHP files
+    name: Lint PHP and run Sanctum Scan feature tests
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -25,6 +25,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
+          extensions: mbstring, sqlite3, pdo_sqlite
           coverage: none
 
       - name: Lint changed PHP files
@@ -44,3 +45,23 @@ jobs:
             echo "Linting $file"
             php -l "$file"
           done
+
+      - name: Install Composer dependencies
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Prepare application key
+        run: php artisan key:generate --force
+
+      - name: Run Sanctum Scan feature tests
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_DRIVER: array
+          QUEUE_CONNECTION: sync
+          SESSION_DRIVER: array
+        run: vendor/bin/phpunit tests/Feature/SanctumScan/EconomicExchangeLifecycleTest.php
