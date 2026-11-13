@@ -21,6 +21,7 @@ class SanctumScanResource extends Model
         'occurred_on',
         'quantity',
         'unit',
+        'scan_expires_in_days',
         'status',
         'archived_at',
     ];
@@ -29,6 +30,7 @@ class SanctumScanResource extends Model
         'merchant_id' => 'integer',
         'occurred_on' => 'date',
         'quantity' => 'decimal:4',
+        'scan_expires_in_days' => 'integer',
         'archived_at' => 'immutable_datetime',
     ];
 
