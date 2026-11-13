@@ -7,8 +7,7 @@ use Illuminate\Console\Command;
 
 class VerifySanctumScanProvenance extends Command
 {
-    protected $signature = 'sanctum-scan:verify-provenance
-                            {file : Path to a saved Sanctum Scan provenance JSON export}';
+    protected $signature = 'sanctum-scan:verify-provenance {file : Path to a saved Sanctum Scan provenance JSON export}';
 
     protected $description = 'Verify a saved Sanctum Scan provenance manifest offline';
 
