@@ -1201,6 +1201,64 @@ class EconomicExchangeLifecycleTest extends TestCase
             $mandate
         );
 
+        // A mandate alone does not authorize evidence access: both the institution
+        // and the verifier need current, administrator-reviewed credentials.
+        $this->actingAs($verifier, 'api')
+            ->get($downloadUrl)
+            ->assertForbidden();
+
+        $institutionCredential = $manager->recordCredentialReview(
+            (int) $institution->getKey(),
+            null,
+            $adminId,
+            'institution_registration',
+            'business_registration',
+            'Kenya Business Registration Service',
+            'BRS-REG-008',
+            'KE',
+            null,
+            'registry_lookup',
+            'verified',
+            'Institution registration was checked against the stated registry reference.',
+            now()->addYear()->toDateTimeString()
+        );
+        $this->assertInstanceOf(SanctumScanVerifierCredentialReview::class, $institutionCredential);
+
+        $memberCredential = $manager->recordCredentialReview(
+            (int) $institution->getKey(),
+            (int) $membership->getKey(),
+            $adminId,
+            'quality_observation',
+            'professional_inspector',
+            'Kenya Bureau of Standards',
+            'KEBS-INSPECTOR-008',
+            'KE',
+            null,
+            'issuer_confirmation',
+            'verified',
+            'Verifier qualification and scope were checked with the stated issuing body.',
+            now()->addYear()->toDateTimeString()
+        );
+        $this->assertInstanceOf(SanctumScanVerifierCredentialReview::class, $memberCredential);
+
+        // Credentials are insufficient until the verifier makes an explicit,
+        // immutable conflict declaration for this exact mandate.
+        $this->actingAs($verifier, 'api')
+            ->get($downloadUrl)
+            ->assertForbidden();
+
+        $this->actingAs($verifier, 'api')
+            ->postJson(
+                '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
+                    . '/evidence/' . $evidence->getKey() . '/conflict-declaration',
+                [
+                    'has_conflict' => false,
+                    'disclosure_statement' => 'I have disclosed the relationships and interests known to me for this scoped evidence review.',
+                ]
+            )
+            ->assertCreated()
+            ->assertJsonPath('data.conflict_declaration.has_conflict', false);
+
         $this->actingAs($verifier, 'api')
             ->get($downloadUrl)
             ->assertDownload('quality-proof-m8.pdf');
@@ -1254,6 +1312,22 @@ class EconomicExchangeLifecycleTest extends TestCase
 
         $this->assertTrue(SanctumScanVerifierRegistryEvent::query()->where('event_type', 'attestation_recorded')->exists());
         $this->assertTrue(SanctumScanExchangeEvent::query()->where('event_type', 'external_verifier_attestation_recorded')->exists());
+
+        $this->actingAs($verifier, 'api')
+            ->postJson(
+                '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
+                    . '/evidence/' . $evidence->getKey() . '/conflict-declaration',
+                [
+                    'has_conflict' => true,
+                    'disclosure_statement' => 'I have subsequently disclosed a material relationship relevant to this evidence review.',
+                ]
+            )
+            ->assertCreated()
+            ->assertJsonPath('data.conflict_declaration.has_conflict', true);
+
+        $this->actingAs($verifier, 'api')
+            ->get($downloadUrl)
+            ->assertForbidden();
 
         $manager->setMandateStatus((int) $mandate->getKey(), $adminId, 'completed');
         $replacementMandate = $manager->grantMandate(
