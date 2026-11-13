@@ -162,6 +162,11 @@ Route::prefix('user')->group(function(){
                     ->whereNumber('membershipId')
                     ->whereNumber('evidenceId')
                     ->name('evidence.download');
+                Route::post('/memberships/{membershipId}/evidence/{evidenceId}/conflict-declaration', 'declareConflict')
+                    ->whereNumber('membershipId')
+                    ->whereNumber('evidenceId')
+                    ->name('evidence.conflict-declaration')
+                    ->middleware('throttle:5,1');
                 Route::post('/memberships/{membershipId}/evidence/{evidenceId}/attestations', 'attest')
                     ->whereNumber('membershipId')
                     ->whereNumber('evidenceId')
@@ -219,6 +224,12 @@ Route::prefix('user')->group(function(){
                 ->whereNumber('exchangeId')
                 ->whereNumber('evidenceId')
                 ->name('api.user.sanctum.exchanges.dispute.evidence.download');
+            Route::post('sanctum/exchanges/{exchangeId}/dispute/evidence/{evidenceId}/attestations/{attestationId}/appeals', [SanctumScanDisputeEvidenceController::class, 'appealAttestation'])
+                ->whereNumber('exchangeId')
+                ->whereNumber('evidenceId')
+                ->whereNumber('attestationId')
+                ->name('api.user.sanctum.exchanges.dispute.evidence.attestations.appeals')
+                ->middleware('throttle:5,1');
         });
 
         Route::post('sanctum/exchanges/{exchangeId}/payment-reference', [SanctumScanExchangeController::class, 'submitPaymentReference'])
