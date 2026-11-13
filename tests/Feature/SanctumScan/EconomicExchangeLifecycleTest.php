@@ -23,6 +23,7 @@ use App\Models\SanctumScanVerifierCredentialReview;
 use App\Models\SanctumScanVerifierConflictDeclaration;
 use App\Models\SanctumScanAttestationAppeal;
 use App\Models\SanctumScanAttestationAppealDecision;
+use App\Models\SanctumScanAttestationRevision;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -122,6 +123,8 @@ class EconomicExchangeLifecycleTest extends TestCase
         $attestationAppealMigration->up();
         $appealDecisionMigration = require base_path('database/migrations/2026_11_13_175000_create_sanctum_scan_attestation_appeal_decisions_table.php');
         $appealDecisionMigration->up();
+        $attestationRevisionMigration = require base_path('database/migrations/2026_11_13_176000_create_sanctum_scan_attestation_revisions_table.php');
+        $attestationRevisionMigration->up();
 
         // Keep Passport authentication, participant status and 2FA checks active.
         // Disable only environment-dependent maintenance, PIN and global KYC gates.
@@ -1679,6 +1682,7 @@ class EconomicExchangeLifecycleTest extends TestCase
 
     protected function tearDown(): void
     {
+        Schema::dropIfExists('sanctum_scan_attestation_revisions');
         Schema::dropIfExists('sanctum_scan_attestation_appeal_decisions');
         Schema::dropIfExists('sanctum_scan_attestation_appeals');
         Schema::dropIfExists('sanctum_scan_verifier_conflict_declarations');
