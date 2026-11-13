@@ -4,10 +4,22 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use LogicException;
 
 class SanctumScanExchangeEvent extends Model
 {
     public $timestamps = false;
+
+    protected static function booted(): void
+    {
+        static::updating(function () {
+            throw new LogicException('Sanctum Scan exchange events are immutable.');
+        });
+
+        static::deleting(function () {
+            throw new LogicException('Sanctum Scan exchange events cannot be deleted.');
+        });
+    }
 
     protected $guarded = ['id'];
 
