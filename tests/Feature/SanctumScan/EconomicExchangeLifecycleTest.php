@@ -1241,6 +1241,42 @@ class EconomicExchangeLifecycleTest extends TestCase
         );
         $this->assertInstanceOf(SanctumScanVerifierCredentialReview::class, $memberCredential);
 
+        // A newer negative review supersedes the earlier positive review.
+        $manager->recordCredentialReview(
+            (int) $institution->getKey(),
+            (int) $membership->getKey(),
+            $adminId,
+            'quality_observation',
+            'professional_inspector',
+            'Kenya Bureau of Standards',
+            'KEBS-INSPECTOR-008',
+            'KE',
+            null,
+            'issuer_confirmation',
+            'unable_to_verify',
+            'The issuing body could not confirm the credential during a subsequent check.',
+            null
+        );
+        $this->actingAs($verifier, 'api')
+            ->get($downloadUrl)
+            ->assertForbidden();
+
+        $manager->recordCredentialReview(
+            (int) $institution->getKey(),
+            (int) $membership->getKey(),
+            $adminId,
+            'quality_observation',
+            'professional_inspector',
+            'Kenya Bureau of Standards',
+            'KEBS-INSPECTOR-008-RECHECK',
+            'KE',
+            null,
+            'issuer_confirmation',
+            'verified',
+            'A fresh confirmation restored this exact scope after the prior review was unable to verify it.',
+            now()->addYear()->toDateTimeString()
+        );
+
         // Credentials are insufficient until the verifier makes an explicit,
         // immutable conflict declaration for this exact mandate.
         $this->actingAs($verifier, 'api')
