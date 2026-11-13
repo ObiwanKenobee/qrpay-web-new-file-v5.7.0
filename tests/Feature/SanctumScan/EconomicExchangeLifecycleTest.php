@@ -374,6 +374,85 @@ class EconomicExchangeLifecycleTest extends TestCase
         ]);
     }
 
+    public function test_buyer_cannot_accept_an_offer_after_the_resource_has_been_archived(): void
+    {
+        $merchant = $this->makeMerchant('archived-resource-seller', 'Archived Resource Seller');
+        $buyer = $this->makeBuyer('archived-resource-buyer');
+        $resource = $this->makeResource($merchant);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+
+        $resource->forceFill([
+            'status' => 'archived',
+            'archived_at' => now(),
+        ])->save();
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/accept')
+            ->assertStatus(409)
+            ->assertJsonPath('error.code', 'offer_withdrawn');
+
+        $this->assertSame('cancelled', SanctumScanExchange::findOrFail($offer['id'])->status);
+        $this->assertDatabaseHas('sanctum_scan_exchange_events', [
+            'exchange_id' => $offer['id'],
+            'event_type' => 'offer_withdrawn',
+            'verification_status' => 'system_recorded',
+        ]);
+    }
+
+    public function test_merchant_cannot_cancel_an_offer_after_buyer_acceptance(): void
+    {
+        $merchant = $this->makeMerchant('accepted-offer-seller', 'Accepted Offer Seller');
+        $buyer = $this->makeBuyer('accepted-offer-buyer');
+        $resource = $this->makeResource($merchant);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/accept')
+            ->assertOk();
+
+        $this->actingAs($merchant, 'merchant_api')
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $offer['id'] . '/cancel')
+            ->assertStatus(409)
+            ->assertJsonPath('error.code', 'invalid_exchange_state');
+
+        $this->assertSame('accepted', SanctumScanExchange::findOrFail($offer['id'])->status);
+    }
+
+    public function test_submitted_payment_evidence_is_immutable(): void
+    {
+        $merchant = $this->makeMerchant('immutable-evidence-seller', 'Immutable Evidence Seller');
+        $buyer = $this->makeBuyer('immutable-evidence-buyer');
+        $resource = $this->makeResource($merchant);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/accept')
+            ->assertOk();
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/payment-reference', [
+                'rail' => 'mpesa',
+                'reference' => 'IMMUTABLE-REF',
+                'amount' => '25000',
+                'currency' => 'KES',
+            ])
+            ->assertCreated();
+
+        $evidence = SanctumScanExchangePaymentEvidence::query()->firstOrFail();
+
+        try {
+            $evidence->update(['verification_status' => 'verified']);
+            $this->fail('Submitted payment evidence should not be mutable.');
+        } catch (\LogicException $exception) {
+            $this->assertSame(
+                'Submitted payment evidence is immutable and requires a separate verification record.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame('unverified', $evidence->fresh()->verification_status);
+    }
+
     protected function tearDown(): void
     {
         Schema::dropIfExists('sanctum_scan_exchange_payment_evidence');
