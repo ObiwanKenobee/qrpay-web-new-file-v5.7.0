@@ -59,6 +59,10 @@ final class ProvenanceManifestVerifier
             $errors[] = 'The manifest must declare SHA-256 over the data object.';
         }
 
+        if (! is_string($manifest['generated_at'] ?? null) || trim($manifest['generated_at']) === '') {
+            $errors[] = 'The manifest must contain a generated_at timestamp.';
+        }
+
         $expectedDigest = $manifest['content_sha256'] ?? null;
 
         if (! is_string($expectedDigest) || ! preg_match('/\A[a-f0-9]{64}\z/', $expectedDigest)) {
@@ -153,7 +157,8 @@ final class ProvenanceManifestVerifier
             }
 
             $reviewDigest = $evidence['verification']['evidence_sha256'] ?? null;
-            if ($reviewDigest !== null && ! hash_equals($evidenceDigest, (string) $reviewDigest)) {
+            if ($reviewDigest !== null
+                && (! $this->isDigest($reviewDigest) || ! hash_equals($evidenceDigest, $reviewDigest))) {
                 $errors[] = "Evidence {$evidenceId} has a platform review digest mismatch.";
             }
 
@@ -319,6 +324,7 @@ final class ProvenanceManifestVerifier
             }
         }
 
+        $eventIds = [];
         foreach ($data['events'] as $eventIndex => $event) {
             if (! is_array($event)
                 || ! $this->isPositiveInteger($event['id'] ?? null)
@@ -327,7 +333,14 @@ final class ProvenanceManifestVerifier
                 || ! is_string($event['actor_type'] ?? null)
                 || ! is_string($event['recorded_at'] ?? null)) {
                 $errors[] = "The event at index {$eventIndex} is missing required provenance fields.";
+                continue;
             }
+
+            $eventId = (string) $event['id'];
+            if (isset($eventIds[$eventId])) {
+                $errors[] = "Event id {$eventId} appears more than once.";
+            }
+            $eventIds[$eventId] = true;
         }
 
         $messages = $data['dispute']['messages'] ?? null;
