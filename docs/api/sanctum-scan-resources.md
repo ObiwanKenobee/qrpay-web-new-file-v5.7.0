@@ -15,14 +15,12 @@ Merchant API:
 Public human scan page:
 
 ```text
-/scan/{reference}
-/```
+/scan/{reference}```
 
 Machine-readable resolver:
 
 ```text
-/api/sanctum/v1/scan/{reference}
-/```
+/api/sanctum/v1/scan/{reference}```
 
 ## List resources
 
