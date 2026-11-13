@@ -42,9 +42,9 @@ class SanctumScanExchangeMerchantController extends Controller
         $validator = Validator::make($request->all(), [
             'resource_id' => 'required|integer|min:1',
             'buyer_username' => 'required|string|max:80',
-            'quantity' => 'required|numeric|gt:0|max:999999999999.9999',
+            'quantity' => ['required', 'numeric', 'gt:0', 'regex:/\A\d{1,12}(?:\.\d{1,4})?\z/'],
             'unit' => 'nullable|string|max:24',
-            'amount' => 'required|numeric|gt:0',
+            'amount' => ['required', 'numeric', 'gt:0', 'regex:/\A\d{1,20}(?:\.\d{1,8})?\z/'],
             'currency' => ['required', 'string', 'size:3', 'regex:/\A[A-Z]{3}\z/'],
             'terms' => 'nullable|string|max:2000',
             'expires_in_hours' => 'nullable|integer|min:1|max:168',
@@ -77,6 +77,8 @@ class SanctumScanExchangeMerchantController extends Controller
             $buyer = User::query()
                 ->where('username', $validated['buyer_username'])
                 ->where('status', true)
+                ->where('email_verified', true)
+                ->where('sms_verified', true)
                 ->whereNull('deleted_at')
                 ->first();
 
@@ -252,6 +254,21 @@ class SanctumScanExchangeMerchantController extends Controller
                 return null;
             }
 
+            if ($exchange->expires_at !== null && $exchange->expires_at->isPast()) {
+                $exchange->forceFill(['status' => 'expired'])->save();
+
+                $events->record(
+                    $exchange,
+                    'offer_expired',
+                    'The offer expired before the merchant withdrew it.',
+                    'system',
+                    0,
+                    'system_recorded'
+                );
+
+                return 'expired';
+            }
+
             $exchange->forceFill([
                 'status' => 'cancelled',
                 'cancelled_at' => now(),
@@ -268,6 +285,15 @@ class SanctumScanExchangeMerchantController extends Controller
 
             return $exchange->fresh(['buyer:id,username', 'paymentEvidence', 'events']);
         });
+
+        if ($exchange === 'expired') {
+            return response()->json([
+                'error' => [
+                    'code' => 'offer_expired',
+                    'message' => 'This offer has already expired.',
+                ],
+            ], 409);
+        }
 
         if (! $exchange) {
             return response()->json([
