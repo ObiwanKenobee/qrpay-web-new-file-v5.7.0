@@ -217,17 +217,21 @@ class EconomicResourceRegistryTest extends TestCase
                 'resource_type' => 'product',
                 'display_name' => 'Maize flour',
                 'category' => 'Food',
+                'expires_in_days' => 30,
             ])
             ->assertCreated();
 
         $resourceId = $created->json('data.id');
         $oldUrl = $created->json('data.scan_url');
+        $this->assertSame(30, SanctumScanResource::findOrFail($resourceId)->scan_expires_in_days);
 
         $rotated = $this->actingAs($merchant, 'merchant_api')
             ->postJson('/merchant-api/merchant/sanctum/resources/' . $resourceId . '/scan-reference')
             ->assertCreated();
 
         $this->assertNotSame($oldUrl, $rotated->json('data.scan_url'));
+        $latestReference = SanctumScanReference::query()->latest('id')->firstOrFail();
+        $this->assertTrue($latestReference->expires_at->greaterThan(now()->addDays(29)));
         $this->get($oldUrl)->assertNotFound();
         $this->get($rotated->json('data.scan_url'))->assertOk()->assertSee('Maize flour');
     }
