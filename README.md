@@ -12,6 +12,8 @@ A QR code is the entry point, not the product.
 
 The larger ambition is to make economic activity more visible, trustworthy, inclusive and intelligent.
 
+> **Implementation status:** This repository currently contains an existing Laravel QRPay application that is being evaluated and extended toward Sanctum Scan. The architecture below describes the intended direction; proposed capabilities are not claims that they are already implemented.
+
 > **We are not simply building another payment application. We are exploring the infrastructure that enables people and institutions to create, exchange, preserve and multiply value.**
 
 ---
@@ -616,54 +618,50 @@ Observe → Understand → Decide → Coordinate → Act → Verify → Learn.
 
 ---
 
-## 8. Open-Source Philosophy
+## 8. Open Development, Licensing and Source Provenance
 
-Sanctum Scan is intended to develop as an open, extensible infrastructure project.
+Sanctum Scan's long-term direction is open, interoperable infrastructure that developers, businesses, institutions and communities can build upon.
 
-The objective is to enable independent developers, businesses, institutions, cooperatives and communities to build on common economic protocols.
+That ambition must be matched by clear software ownership, licensing and third-party attribution.
 
-### Open Development
+### Current repository status
 
-The proposed open-source foundation includes:
+This repository contains a substantial pre-existing Laravel application with payment, wallet, identity, merchant, agent, QR and provider-integration functionality.
 
-- Full-stack reference application
-- QR protocol and schemas
-- Identity and consent framework
-- Economic event models
-- Merchant infrastructure
-- Cooperative modules
-- API specifications
-- Webhooks and integration interfaces
-- Developer SDKs
-- Reference payment adapters
-- Offline synchronization framework
-- Documentation and testing tools
+At the time of this update:
 
-### Commercial Infrastructure
+- The repository does not contain a root `LICENSE` file.
+- `composer.json` declares an MIT license identifier, but that metadata alone does not establish redistribution rights for every file or dependency in this repository.
+- The application contains purchase-code and marketplace-product configuration.
+- Composer references an externally hosted `reachead/laravel-sdk` package.
+- The original project documentation identified the codebase as a versioned QRPay product.
 
-Atlas Sanctum may provide additional services:
+These are material source-provenance signals. The current application must not be assumed to be relicensable or redistributable under Apache-2.0, MIT or another open-source license until the applicable upstream terms, ownership and dependency notices have been reviewed.
 
-- Hosted infrastructure
-- Enterprise deployments
-- Institutional integrations
-- Managed services
-- Premium intelligence
-- Implementation and technical support
-- Specialized operational services
+**No new root license is introduced by this change.** Do not remove existing notices, redistribute vendor-owned code, or claim that the complete inherited application is open source without documented rights to do so.
 
-### Open-Source Principles
+### Intended open-source boundary
 
-1. Interoperability over unnecessary vendor lock-in.
-2. Community participation in development.
-3. Transparent technical specifications.
-4. Reusable and extensible infrastructure.
-5. Privacy and security by design.
-6. Responsible commercial sustainability.
+Subject to provenance review, Atlas Sanctum intends to develop original Sanctum Scan specifications, schemas, SDKs, test fixtures and independently authored modules as openly reusable components.
 
-The proposed licensing direction is Apache License 2.0, subject to the project's formal licensing decision and publication of the applicable `LICENSE` file.
+The existing application can serve as the integration host while new capabilities are introduced incrementally. Each new component should have:
 
-Atlas Sanctum and Sanctum Scan names and marks should be governed separately from the software license.
+- A documented source and ownership record.
+- An explicit license approved for that component.
+- Clear dependency and attribution notices.
+- Tests for its public contracts.
+- Security and privacy review appropriate to its function.
 
+### Commercial services and operational controls
+
+Open software can coexist with commercial hosted services, managed deployments, institutional integrations, support and specialized intelligence.
+
+Regardless of licensing, production customer data, payment credentials, secrets, signing keys and operational security controls must remain protected.
+
+Atlas Sanctum and Sanctum Scan names and marks should be governed separately from software licensing.
+
+See [the source-provenance review](docs/security/source-provenance.md) and [the first architecture decision](docs/architecture/decisions/0001-incremental-adoption.md).
+ 
 ---
 
 ## 9. Technology Direction
