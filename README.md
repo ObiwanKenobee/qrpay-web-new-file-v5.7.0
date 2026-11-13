@@ -1114,9 +1114,9 @@ Contributors should consult the repository's contribution guidelines, security p
 
 The first read-only Sanctum Scan resolver is available at:
 
-\`\`\`http
+```http
 GET /api/sanctum/v1/scan/{reference}
-\`\`\`
+```
 
 References use a high-entropy opaque token. The database stores only its SHA-256 hash. Resolution returns a small public resource description and does not expose internal resource IDs, authenticate the scanner, authorize a transaction or confirm payment settlement.
 
