@@ -61,7 +61,7 @@ class ExchangeDisputeManager
                 ['dispute_id' => $dispute->getKey(), 'category' => $category]
             );
 
-            return $dispute->fresh('messages');
+            return $dispute->fresh(['messages']);
         });
     }
 
@@ -89,7 +89,7 @@ class ExchangeDisputeManager
                 ['dispute_id' => $dispute->getKey(), 'message_id' => $message->getKey()]
             );
 
-            return $dispute->fresh('messages');
+            return $dispute->fresh(['messages']);
         });
     }
 
@@ -125,7 +125,7 @@ class ExchangeDisputeManager
                 ['dispute_id' => $dispute->getKey(), 'message_id' => $message->getKey()]
             );
 
-            return $dispute->fresh('messages');
+            return $dispute->fresh(['messages']);
         });
     }
 
@@ -169,7 +169,7 @@ class ExchangeDisputeManager
                 ['dispute_id' => $dispute->getKey(), 'message_id' => $message->getKey()]
             );
 
-            return $dispute->fresh('messages');
+            return $dispute->fresh(['messages']);
         });
     }
 
@@ -209,7 +209,7 @@ class ExchangeDisputeManager
                 ['dispute_id' => $dispute->getKey(), 'message_id' => $message->getKey()]
             );
 
-            return $dispute->fresh('messages');
+            return $dispute->fresh(['messages']);
         });
     }
 
@@ -262,7 +262,7 @@ class ExchangeDisputeManager
                 ['dispute_id' => $dispute->getKey(), 'message_id' => $message->getKey()]
             );
 
-            return $dispute->fresh('messages');
+            return $dispute->fresh(['messages']);
         });
     }
 
