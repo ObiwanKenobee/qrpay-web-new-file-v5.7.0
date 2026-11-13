@@ -14,7 +14,7 @@ Sanctum Scan needs a merchant-owned public identity reference that resolves thro
 
 1. Use the authenticated `merchant_api` guard to identify the merchant. Never accept `merchant_id`, resource type or display identity from the request body.
 2. Expose authenticated list, issue and revoke operations under the merchant API.
-3. Require the existing merchant account status and two-factor middleware for merchant reference operations. Reference creation/revocation also passes the application's configured merchant KYC middleware.
+3. Require the existing merchant account status and two-factor middleware for merchant reference operations. Reference creation also passes the application's configured merchant KYC middleware; revocation remains available to the authenticated owner.
 4. Issue a `merchant` scan reference bound to the authenticated merchant's internal ID.
 5. Record the issuing actor guard and ID, and the revoking actor guard and ID, as audit metadata.
 6. Generate an SVG QR code containing only the public scan URL. Do not encode email, phone number, wallet identifiers, credentials or private profile fields.
