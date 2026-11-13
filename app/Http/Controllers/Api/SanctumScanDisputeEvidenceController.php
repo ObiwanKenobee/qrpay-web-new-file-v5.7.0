@@ -184,6 +184,17 @@ class SanctumScanDisputeEvidenceController extends Controller
                 'basis_summary' => $attestation->basis_summary,
                 'evidence_sha256' => $attestation->evidence_sha256,
                 'attested_at' => $attestation->attested_at?->toIso8601String(),
+                'appeals' => $attestation->appeals->map(fn ($appeal) => [
+                    'id' => $appeal->getKey(),
+                    'reason_code' => $appeal->reason_code,
+                    'statement' => $appeal->statement,
+                    'submitted_at' => $appeal->submitted_at?->toIso8601String(),
+                    'decision' => $appeal->decision ? [
+                        'outcome' => $appeal->decision->outcome,
+                        'summary' => $appeal->decision->decision_summary,
+                        'decided_at' => $appeal->decision->decided_at?->toIso8601String(),
+                    ] : null,
+                ])->values()->all(),
             ])->values()->all(),
             'verification' => $review ? [
                 'status' => $review->review_status,
