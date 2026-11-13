@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\Merchant\SanctumScanReferenceController;
 use App\Http\Controllers\Api\Merchant\SanctumScanResourceController;
 use App\Http\Controllers\Api\Merchant\SanctumScanExchangeMerchantController;
 use App\Http\Controllers\Api\SanctumScanExchangeDisputeController;
+use App\Http\Controllers\Api\SanctumScanDisputeEvidenceController;
 use App\Http\Controllers\Api\Merchant\SetupPinController;
 use App\Http\Controllers\Api\Merchant\TransactionController;
 use App\Http\Helpers\Api\Helpers;
