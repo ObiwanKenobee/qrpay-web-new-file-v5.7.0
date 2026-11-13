@@ -25,6 +25,12 @@ Each submission creates a new immutable record. The latest record for the instit
 
 This endpoint records an administrator's manual check; it does not call an external government or professional registry and does not certify accreditation.
 
+### Review credential history
+
+GET `/{admin-prefix}/sanctum/verifiers/{institutionId}/credentials`
+
+Returns the institution's credential review records, newest first, with membership association, review source, status, summary, reviewer and expiry.
+
 ## Verifier conflict declaration
 
 ### Declare or disclose a conflict
