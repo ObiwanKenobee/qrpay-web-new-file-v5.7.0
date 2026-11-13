@@ -1202,6 +1202,25 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->assertTrue(SanctumScanVerifierRegistryEvent::query()->where('event_type', 'attestation_recorded')->exists());
         $this->assertTrue(SanctumScanExchangeEvent::query()->where('event_type', 'external_verifier_attestation_recorded')->exists());
 
+        $manager->setMandateStatus((int) $mandate->getKey(), $adminId, 'completed');
+        $replacementMandate = $manager->grantMandate(
+            (int) $evidence->getKey(),
+            (int) $institution->getKey(),
+            $adminId,
+            'source_provenance',
+            'Re-check the provenance metadata under a new, separate mandate.',
+            now()->addDays(14)->toDateTimeString()
+        );
+        $this->assertInstanceOf(
+            \App\Models\SanctumScanEvidenceVerificationMandate::class,
+            $replacementMandate
+        );
+        $this->assertNotSame($mandate->getKey(), $replacementMandate->getKey());
+        $this->assertSame('completed', $mandate->fresh()->status);
+        $this->assertSame('quality_observation', $mandate->fresh()->verification_scope);
+        $this->assertSame($mandate->getKey(), $attestation->fresh()->mandate_id);
+        $this->assertSame('source_provenance', $replacementMandate->verification_scope);
+
         try {
             $attestation->update(['outcome' => 'not_corroborated']);
             $this->fail('Independent attestations should be immutable.');
