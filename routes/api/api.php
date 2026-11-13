@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Artisan;
 use App\Providers\Admin\BasicSettingsProvider;
 use App\Http\Controllers\Api\User\UserController;
 use App\Http\Controllers\Api\User\SanctumScanExchangeController;
+use App\Http\Controllers\Api\SanctumScanExchangeDisputeController;
 use App\Http\Controllers\Api\AppSettingsController;
 use App\Http\Controllers\Api\User\BillPayController;
 use App\Http\Controllers\Api\User\AddMoneyController;
@@ -146,6 +147,11 @@ Route::prefix('user')->group(function(){
             ->name('api.user.sanctum.exchanges.index')
             ->middleware('throttle:30,1');
 
+        Route::get('sanctum/exchanges/{exchangeId}/dispute', [SanctumScanExchangeDisputeController::class, 'show'])
+            ->whereNumber('exchangeId')
+            ->name('api.user.sanctum.exchanges.dispute.show')
+            ->middleware('throttle:30,1');
+
         Route::middleware(['user.pin.setup.guard', 'throttle:10,1'])->group(function () {
             Route::post('sanctum/exchanges/{exchangeId}/accept', [SanctumScanExchangeController::class, 'accept'])
                 ->whereNumber('exchangeId')
@@ -156,6 +162,25 @@ Route::prefix('user')->group(function(){
             Route::post('sanctum/exchanges/{exchangeId}/receipt', [SanctumScanExchangeController::class, 'confirmReceipt'])
                 ->whereNumber('exchangeId')
                 ->name('api.user.sanctum.exchanges.receipt');
+
+            Route::post('sanctum/exchanges/{exchangeId}/dispute', [SanctumScanExchangeDisputeController::class, 'open'])
+                ->whereNumber('exchangeId')
+                ->name('api.user.sanctum.exchanges.dispute.open');
+            Route::post('sanctum/exchanges/{exchangeId}/dispute/messages', [SanctumScanExchangeDisputeController::class, 'addMessage'])
+                ->whereNumber('exchangeId')
+                ->name('api.user.sanctum.exchanges.dispute.messages');
+            Route::post('sanctum/exchanges/{exchangeId}/dispute/propose-resolution', [SanctumScanExchangeDisputeController::class, 'proposeResolution'])
+                ->whereNumber('exchangeId')
+                ->name('api.user.sanctum.exchanges.dispute.propose-resolution');
+            Route::post('sanctum/exchanges/{exchangeId}/dispute/accept-resolution', [SanctumScanExchangeDisputeController::class, 'acceptResolution'])
+                ->whereNumber('exchangeId')
+                ->name('api.user.sanctum.exchanges.dispute.accept-resolution');
+            Route::post('sanctum/exchanges/{exchangeId}/dispute/reject-resolution', [SanctumScanExchangeDisputeController::class, 'rejectResolution'])
+                ->whereNumber('exchangeId')
+                ->name('api.user.sanctum.exchanges.dispute.reject-resolution');
+            Route::post('sanctum/exchanges/{exchangeId}/dispute/withdraw', [SanctumScanExchangeDisputeController::class, 'withdraw'])
+                ->whereNumber('exchangeId')
+                ->name('api.user.sanctum.exchanges.dispute.withdraw');
         });
 
         Route::post('sanctum/exchanges/{exchangeId}/payment-reference', [SanctumScanExchangeController::class, 'submitPaymentReference'])

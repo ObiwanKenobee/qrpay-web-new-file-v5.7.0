@@ -6,6 +6,8 @@ use App\Models\Merchants\Merchant;
 use App\Models\SanctumScanExchange;
 use App\Models\SanctumScanExchangeEvent;
 use App\Models\SanctumScanExchangePaymentEvidence;
+use App\Models\SanctumScanExchangeDispute;
+use App\Models\SanctumScanExchangeDisputeMessage;
 use App\Models\SanctumScanResource;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
@@ -70,6 +72,10 @@ class EconomicExchangeLifecycleTest extends TestCase
         $eventMigration->up();
         $paymentEvidenceMigration = require base_path('database/migrations/2026_11_13_162000_create_sanctum_scan_exchange_payment_evidence_table.php');
         $paymentEvidenceMigration->up();
+        $disputeMigration = require base_path('database/migrations/2026_11_13_163000_create_sanctum_scan_exchange_disputes_table.php');
+        $disputeMigration->up();
+        $disputeMessageMigration = require base_path('database/migrations/2026_11_13_164000_create_sanctum_scan_exchange_dispute_messages_table.php');
+        $disputeMessageMigration->up();
 
         // Keep Passport authentication, participant status and 2FA checks active.
         // Disable only environment-dependent maintenance, PIN and global KYC gates.
@@ -514,8 +520,256 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->assertSame('unverified', $evidence->fresh()->verification_status);
     }
 
+
+    public function test_bilateral_dispute_can_be_resolved_only_by_the_other_participant(): void
+    {
+        $merchant = $this->makeMerchant('dispute-flow-seller', 'Dispute Flow Seller');
+        $buyer = $this->makeBuyer('dispute-flow-buyer');
+        $resource = $this->makeResource($merchant);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+        $exchangeId = $offer['id'];
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->assertOk();
+
+        $this->actingAs($merchant, 'merchant_api')
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute', [
+                'category' => 'quantity_mismatch',
+                'statement' => 'The parties need to reconcile the measured quantity.',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.dispute.status', 'open')
+            ->assertJsonPath('data.dispute.opened_by', 'merchant');
+
+        $this->actingAs($buyer, 'api')
+            ->getJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute')
+            ->assertOk()
+            ->assertJsonPath('data.dispute.messages.0.body', 'The parties need to reconcile the measured quantity.');
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/messages', [
+                'message' => 'I agree that we should compare the measurement records.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.dispute.messages.1.author', 'buyer');
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/propose-resolution', [
+                'summary' => 'Both parties will arrange a joint quantity check.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.dispute.status', 'resolution_proposed');
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/accept-resolution')
+            ->assertStatus(409)
+            ->assertJsonPath('error.code', 'proposer_cannot_accept');
+
+        $this->actingAs($merchant, 'merchant_api')
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute/accept-resolution')
+            ->assertOk()
+            ->assertJsonPath('data.dispute.status', 'resolved')
+            ->assertJsonPath('data.dispute.resolved_by', 'merchant');
+
+        $this->assertSame('accepted', SanctumScanExchange::findOrFail($exchangeId)->status);
+        $this->assertSame(1, SanctumScanExchangeDispute::query()->where('exchange_id', $exchangeId)->count());
+        $this->assertSame(4, SanctumScanExchangeDisputeMessage::query()->count());
+        $this->assertDatabaseHas('sanctum_scan_exchange_events', [
+            'exchange_id' => $exchangeId,
+            'event_type' => 'dispute_resolution_accepted',
+            'verification_status' => 'merchant_declared',
+        ]);
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute')
+            ->assertStatus(409)
+            ->assertJsonPath('error.code', 'dispute_exists');
+    }
+
+    public function test_dispute_routes_are_scoped_to_the_exchange_participants(): void
+    {
+        $merchant = $this->makeMerchant('dispute-scope-seller', 'Dispute Scope Seller');
+        $buyer = $this->makeBuyer('dispute-scope-buyer');
+        $otherBuyer = $this->makeBuyer('dispute-scope-outsider');
+        $resource = $this->makeResource($merchant);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/accept')
+            ->assertOk();
+
+        $this->actingAs($otherBuyer, 'api')
+            ->getJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/dispute')
+            ->assertNotFound();
+
+        $this->actingAs($otherBuyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/dispute', [
+                'category' => 'other',
+                'statement' => 'An unauthorized statement.',
+            ])
+            ->assertNotFound();
+
+        $this->assertSame(0, SanctumScanExchangeDispute::query()->count());
+    }
+
+    public function test_disputes_cannot_be_opened_before_an_offer_is_accepted(): void
+    {
+        $merchant = $this->makeMerchant('dispute-state-seller', 'Dispute State Seller');
+        $buyer = $this->makeBuyer('dispute-state-buyer');
+        $resource = $this->makeResource($merchant);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/dispute', [
+                'category' => 'non_delivery',
+                'statement' => 'The exchange has not progressed.',
+            ])
+            ->assertStatus(409)
+            ->assertJsonPath('error.code', 'exchange_not_disputable');
+
+        $this->assertSame(0, SanctumScanExchangeDispute::query()->count());
+    }
+
+    public function test_rejecting_a_resolution_returns_the_dispute_to_open(): void
+    {
+        $merchant = $this->makeMerchant('dispute-reject-seller', 'Dispute Reject Seller');
+        $buyer = $this->makeBuyer('dispute-reject-buyer');
+        $resource = $this->makeResource($merchant);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+        $exchangeId = $offer['id'];
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->assertOk();
+
+        $this->actingAs($merchant, 'merchant_api')
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute', [
+                'category' => 'terms_disagreement',
+                'statement' => 'The parties disagree about the agreed collection terms.',
+            ])
+            ->assertCreated();
+
+        $this->actingAs($merchant, 'merchant_api')
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute/propose-resolution', [
+                'summary' => 'Proposed resolution: reschedule collection.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.dispute.status', 'resolution_proposed');
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/reject-resolution', [
+                'reason' => 'The proposed time is not workable.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.dispute.status', 'open')
+            ->assertJsonPath('data.dispute.messages.2.type', 'resolution_rejected');
+    }
+
+    public function test_initiator_cannot_withdraw_after_counterparty_response(): void
+    {
+        $merchant = $this->makeMerchant('dispute-withdraw-seller', 'Dispute Withdraw Seller');
+        $buyer = $this->makeBuyer('dispute-withdraw-buyer');
+        $resource = $this->makeResource($merchant);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+        $exchangeId = $offer['id'];
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->assertOk();
+
+        $this->actingAs($merchant, 'merchant_api')
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute', [
+                'category' => 'payment_question',
+                'statement' => 'The payment reference needs clarification.',
+            ])
+            ->assertCreated();
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/messages', [
+                'message' => 'I will provide the transaction receipt for review.',
+            ])
+            ->assertOk();
+
+        $this->actingAs($merchant, 'merchant_api')
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute/withdraw')
+            ->assertStatus(409)
+            ->assertJsonPath('error.code', 'withdrawal_not_allowed');
+
+        $this->assertSame('open', SanctumScanExchangeDispute::query()->firstOrFail()->status);
+    }
+
+    public function test_initiator_can_withdraw_before_counterparty_response(): void
+    {
+        $merchant = $this->makeMerchant('dispute-withdraw-clean-seller', 'Dispute Withdraw Clean Seller');
+        $buyer = $this->makeBuyer('dispute-withdraw-clean-buyer');
+        $resource = $this->makeResource($merchant);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+        $exchangeId = $offer['id'];
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->assertOk();
+
+        $this->actingAs($merchant, 'merchant_api')
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute', [
+                'category' => 'other',
+                'statement' => 'Opening statement that the merchant later withdraws.',
+            ])
+            ->assertCreated();
+
+        $this->actingAs($merchant, 'merchant_api')
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute/withdraw')
+            ->assertOk()
+            ->assertJsonPath('data.dispute.status', 'withdrawn');
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute')
+            ->assertStatus(409)
+            ->assertJsonPath('error.code', 'dispute_exists');
+    }
+
+    public function test_dispute_messages_are_immutable(): void
+    {
+        $merchant = $this->makeMerchant('dispute-immutable-seller', 'Dispute Immutable Seller');
+        $buyer = $this->makeBuyer('dispute-immutable-buyer');
+        $resource = $this->makeResource($merchant);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+        $exchangeId = $offer['id'];
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->assertOk();
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute', [
+                'category' => 'quality_concern',
+                'statement' => 'The quality needs further discussion.',
+            ])
+            ->assertCreated();
+
+        $message = SanctumScanExchangeDisputeMessage::query()->firstOrFail();
+
+        try {
+            $message->update(['body' => 'Edited statement']);
+            $this->fail('Dispute messages should be immutable.');
+        } catch (\LogicException $exception) {
+            $this->assertSame(
+                'Sanctum Scan dispute messages are immutable.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertSame(
+            'The quality needs further discussion.',
+            $message->fresh()->body
+        );
+    }
+
     protected function tearDown(): void
     {
+        Schema::dropIfExists('sanctum_scan_exchange_dispute_messages');
+        Schema::dropIfExists('sanctum_scan_exchange_disputes');
         Schema::dropIfExists('sanctum_scan_exchange_payment_evidence');
         Schema::dropIfExists('sanctum_scan_exchange_events');
         Schema::dropIfExists('sanctum_scan_exchanges');
