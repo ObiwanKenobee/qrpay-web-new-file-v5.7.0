@@ -169,6 +169,17 @@ Route::prefix('merchant')->group(function(){
                 Route::post('sanctum/exchanges/{exchangeId}/dispute/withdraw', [SanctumScanExchangeDisputeController::class, 'withdraw'])
                     ->whereNumber('exchangeId')
                     ->name('sanctum.exchanges.dispute.withdraw');
+
+                Route::get('sanctum/exchanges/{exchangeId}/dispute/evidence', [SanctumScanDisputeEvidenceController::class, 'index'])
+                    ->whereNumber('exchangeId')
+                    ->name('sanctum.exchanges.dispute.evidence.index');
+                Route::post('sanctum/exchanges/{exchangeId}/dispute/evidence', [SanctumScanDisputeEvidenceController::class, 'store'])
+                    ->whereNumber('exchangeId')
+                    ->name('sanctum.exchanges.dispute.evidence.store');
+                Route::get('sanctum/exchanges/{exchangeId}/dispute/evidence/{evidenceId}/download', [SanctumScanDisputeEvidenceController::class, 'download'])
+                    ->whereNumber('exchangeId')
+                    ->whereNumber('evidenceId')
+                    ->name('sanctum.exchanges.dispute.evidence.download');
             });
             Route::get('dashboard', [UserController::class,'home']);
             Route::post('verify/pin', [UserController::class,'pinVerify'])->middleware(['merchant.pin.setup.guard']);
