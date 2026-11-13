@@ -1,0 +1,111 @@
+<?php
+
+namespace App\Notifications\User\GiftCard;
+
+use App\Constants\EmailTemplateConst;
+use App\Models\Admin\EmailTemplate;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Notifications\Notification;
+use Illuminate\Support\Carbon;
+
+class GiftCardMail extends Notification
+{
+    use Queueable;
+
+    public $user;
+    public $data;
+
+    /**
+     * Create a new notification instance.
+     *
+     * @return void
+     */
+    public function __construct($user,$data)
+    {
+        $this->user = $user;
+        $this->data = $data;
+    }
+
+    /**
+     * Get the notification's delivery channels.
+     *
+     * @param  mixed  $notifiable
+     * @return array
+     */
+    public function via($notifiable)
+    {
+        return EmailTemplate::isDisabled(EmailTemplateConst::USER_GIFT_CARD_ORDER, $notifiable) ? [] : ['mail'];
+    }
+
+    /**
+     * Get the mail representation of the notification.
+     *
+     * @param  mixed  $notifiable
+     * @return \Illuminate\Notifications\Messages\MailMessage
+     */
+    public function toMail($notifiable)
+    {
+        $user = $this->user;
+        $data = $this->data;
+        $trx_id = $this->data['giftCard']['trx_id'];
+        $date = Carbon::now();
+        $dateTime = $date->format('Y-m-d h:i:s A');
+        // charge_info has no precision_digit key; reading it threw and the mail was silently skipped
+        $data['charge_info']['precision_digit'] = $data['charge_info']['precision_digit'] ?? get_wallet_precision();
+        $template_mail = EmailTemplate::mailMessage(EmailTemplateConst::USER_GIFT_CARD_ORDER, [
+            'user_name'     => e($user->fullname),
+            'subject'       => e($data['title']??__("Gift Card Order")),
+            'title'         => e(__("Your Gift Card Email Details")),
+            'details'       => EmailTemplate::detailsTable([
+                __("TRX ID")                          => $trx_id,
+                __("Card Name")                       => $data['giftCard']['card_name'],
+                __("receiver Email")                  => $data['giftCard']['recipient_email'],
+                __("Receiver Phone")                  => "+".$data['giftCard']['recipient_phone'],
+                __("Card Unit Price")                 => get_amount($data['charge_info']['card_unit_price'],$data['charge_info']['card_currency'],$data['charge_info']['precision_digit']),
+                __("Card Quantity")                   => $data['charge_info']['qty'],
+                __("Card Total Price")                => get_amount($data['charge_info']['total_receiver_amount'],$data['charge_info']['card_currency'],$data['charge_info']['precision_digit']),
+                __("Exchange Rate")                   => get_amount(1,$data['charge_info']['card_currency'])." = ".get_amount($data['charge_info']['exchange_rate'],$data['charge_info']['card_currency'],$data['charge_info']['precision_digit']),
+                __("Payable Unit Price")              => get_amount($data['charge_info']['sender_unit_price'],$data['charge_info']['wallet_currency'],$data['charge_info']['precision_digit']),
+                __("Payable Amount")                  => get_amount($data['charge_info']['conversion_amount'],$data['charge_info']['wallet_currency'],$data['charge_info']['precision_digit']),
+                __("Total Charge")                    => get_amount($data['charge_info']['total_charge'],$data['charge_info']['wallet_currency'],$data['charge_info']['precision_digit']),
+                __("Total Payable Amount")            => get_amount($data['charge_info']['payable'],$data['charge_info']['wallet_currency'],$data['charge_info']['precision_digit']),
+            ]),
+            'date_time'     => $dateTime,
+        ], $notifiable);
+        if($template_mail) return $template_mail;
+
+        return (new MailMessage)
+                    ->greeting(__("Hello")." ".$user->fullname." !")
+                    ->subject($data['title']??__("Gift Card Order"))
+                    ->line(__("Your Gift Card Email Details")." :")
+                    ->line(__("TRX ID")." : " .$trx_id)
+                    ->line(__("Card Name")." : " .$data['giftCard']['card_name'])
+                    ->line(__("receiver Email")." : " .$data['giftCard']['recipient_email'])
+                    ->line(__("Receiver Phone")." : " ."+".$data['giftCard']['recipient_phone'])
+                    ->line(__("Card Unit Price")." : " .get_amount($data['charge_info']['card_unit_price'],$data['charge_info']['card_currency']))
+                    ->line(__("Card Quantity")." : " .$data['charge_info']['qty'])
+                    ->line(__("Card Total Price")." : " .get_amount($data['charge_info']['total_receiver_amount'],$data['charge_info']['card_currency']))
+                    ->line(__("Exchange Rate")." : " .get_amount(1,$data['charge_info']['card_currency'])." = ".get_amount($data['charge_info']['exchange_rate'],$data['charge_info']['card_currency']))
+                    ->line(__("Payable Unit Price")." : " .get_amount($data['charge_info']['sender_unit_price'],$data['charge_info']['wallet_currency']))
+                    ->line(__("Payable Amount")." : " .get_amount($data['charge_info']['conversion_amount'],$data['charge_info']['wallet_currency']))
+                    ->line(__("Total Charge")." : " .get_amount($data['charge_info']['total_charge'],$data['charge_info']['wallet_currency']))
+                    ->line(__("Total Payable Amount")." : " .get_amount($data['charge_info']['payable'],$data['charge_info']['wallet_currency']))
+                    ->line(__("Time & Date")." : " .$dateTime)
+                    ->line(__('Thank you for using our application!'));
+    }
+
+    /**
+     * Get the array representation of the notification.
+     *
+     * @param  mixed  $notifiable
+     * @return array
+     */
+    public function toArray($notifiable)
+    {
+        return [
+            //
+        ];
+    }
+}
