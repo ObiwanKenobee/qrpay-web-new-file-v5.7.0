@@ -1265,6 +1265,17 @@ See [ADR 0009](docs/architecture/decisions/0009-verifier-credentials-conflicts-a
 
 See [ADR 0010](docs/architecture/decisions/0010-versioned-attestation-revisions.md) and [the revision API guide](docs/api/sanctum-scan-attestation-revisions.md).
 
+**Milestone 011 — Independent attestation reassessment**
+
+- A different active member of the same institution can issue a fresh assessment of an earlier attestation, but only under a distinct new mandate for the same evidence and original scope.
+- The reassessor must accept their own membership invitation, hold current exact-scope credentials, submit a new no-conflict declaration and pass the existing evidence-integrity check.
+- The new attestation is a separate immutable statement. An append-only link records the exact prior version, prior status, evidence digest, reassessing membership and reason.
+- The original verifier's attestation and M10 revision chain are never edited, inherited or silently superseded. Participants can inspect both records and their relationship.
+- Reassessment adds registry and exchange-timeline events without changing exchange, dispute, payment, wallet, refund or settlement state.
+- This is not proof of legal succession or external institutional authority. It does not establish user/merchant cross-account identity mapping or decide which assessment is true.
+
+See [ADR 0011](docs/architecture/decisions/0011-independent-attestation-reassessment.md) and [the reassessment API guide](docs/api/sanctum-scan-attestation-reassessments.md).
+
 **Project:** Atlas Sanctum — Sanctum Scan.
 
 **Initial geographic research context:** Nakuru County, Kenya.
