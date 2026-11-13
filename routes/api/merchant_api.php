@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\Merchant\SecurityController;
 use App\Http\Controllers\Api\Merchant\SanctumScanReferenceController;
 use App\Http\Controllers\Api\Merchant\SanctumScanResourceController;
 use App\Http\Controllers\Api\Merchant\SanctumScanExchangeMerchantController;
+use App\Http\Controllers\Api\SanctumScanExchangeDisputeController;
 use App\Http\Controllers\Api\Merchant\SetupPinController;
 use App\Http\Controllers\Api\Merchant\TransactionController;
 use App\Http\Helpers\Api\Helpers;
@@ -134,6 +135,11 @@ Route::prefix('merchant')->group(function(){
                 ->name('sanctum.exchanges.index')
                 ->middleware('throttle:30,1');
 
+            Route::get('sanctum/exchanges/{exchangeId}/dispute', [SanctumScanExchangeDisputeController::class, 'show'])
+                ->whereNumber('exchangeId')
+                ->name('sanctum.exchanges.dispute.show')
+                ->middleware('throttle:30,1');
+
             Route::middleware(['merchant.pin.setup.guard', 'throttle:10,1'])->group(function () {
                 Route::post('sanctum/exchanges', [SanctumScanExchangeMerchantController::class, 'store'])
                     ->name('sanctum.exchanges.store')
@@ -144,6 +150,25 @@ Route::prefix('merchant')->group(function(){
                 Route::post('sanctum/exchanges/{exchangeId}/cancel', [SanctumScanExchangeMerchantController::class, 'cancel'])
                     ->whereNumber('exchangeId')
                     ->name('sanctum.exchanges.cancel');
+
+                Route::post('sanctum/exchanges/{exchangeId}/dispute', [SanctumScanExchangeDisputeController::class, 'open'])
+                    ->whereNumber('exchangeId')
+                    ->name('sanctum.exchanges.dispute.open');
+                Route::post('sanctum/exchanges/{exchangeId}/dispute/messages', [SanctumScanExchangeDisputeController::class, 'addMessage'])
+                    ->whereNumber('exchangeId')
+                    ->name('sanctum.exchanges.dispute.messages');
+                Route::post('sanctum/exchanges/{exchangeId}/dispute/propose-resolution', [SanctumScanExchangeDisputeController::class, 'proposeResolution'])
+                    ->whereNumber('exchangeId')
+                    ->name('sanctum.exchanges.dispute.propose-resolution');
+                Route::post('sanctum/exchanges/{exchangeId}/dispute/accept-resolution', [SanctumScanExchangeDisputeController::class, 'acceptResolution'])
+                    ->whereNumber('exchangeId')
+                    ->name('sanctum.exchanges.dispute.accept-resolution');
+                Route::post('sanctum/exchanges/{exchangeId}/dispute/reject-resolution', [SanctumScanExchangeDisputeController::class, 'rejectResolution'])
+                    ->whereNumber('exchangeId')
+                    ->name('sanctum.exchanges.dispute.reject-resolution');
+                Route::post('sanctum/exchanges/{exchangeId}/dispute/withdraw', [SanctumScanExchangeDisputeController::class, 'withdraw'])
+                    ->whereNumber('exchangeId')
+                    ->name('sanctum.exchanges.dispute.withdraw');
             });
             Route::get('dashboard', [UserController::class,'home']);
             Route::post('verify/pin', [UserController::class,'pinVerify'])->middleware(['merchant.pin.setup.guard']);
