@@ -1276,6 +1276,22 @@ See [ADR 0010](docs/architecture/decisions/0010-versioned-attestation-revisions.
 
 See [ADR 0011](docs/architecture/decisions/0011-independent-attestation-reassessment.md) and [the reassessment API guide](docs/api/sanctum-scan-attestation-reassessments.md).
 
+**Milestones 012–014 — Participant provenance export and offline verification (integration pending)**
+
+- Participant-scoped provenance export, the offline manifest verifier and verifier consistency hardening have been implemented on the dependent branch \`sanctum-scan/provenance-verifier-hardening-014\`.
+- Those changes are not yet integrated into \`main\`; the branch has diverged and requires a separately reviewed integration change. See [the engineering roadmap](docs/architecture/roadmap.md) for the exact branch state.
+
+**Milestone 015 — Manual buyer identity review and optional acceptance gate (PR #16)**
+
+- An append-only administrator review ledger records the method, internal case reference, decision, summary, reviewer and timestamps. A later non-verified result clears the current verified projection without rewriting earlier reviews.
+- The optional gate is disabled by default and is checked only inside the buyer's acceptance transaction. An unverified buyer receives a buyer-only \`403 buyer_identity_unverified\`; the offer remains \`offered\`.
+- Merchants may still issue offers and are not told the buyer's identity-review status.
+- Admin review and gate configuration endpoints use the existing admin authentication, role-permission and 2FA middleware. Reviewers are derived from the authenticated admin session.
+- No raw identity documents, government ID numbers, biometric templates or third-party KYC integrations are introduced. This is a manual account eligibility review, not proof of legal identity or cross-guard account uniqueness.
+- Existing payment, wallet and settlement behavior is unchanged.
+
+See [ADR 0015](docs/architecture/decisions/0015-manual-buyer-identity-review.md), the [buyer identity review API guide](docs/api/sanctum-scan-buyer-identity-review.md), and [the engineering roadmap](docs/architecture/roadmap.md).
+
 **Project:** Atlas Sanctum — Sanctum Scan.
 
 **Initial geographic research context:** Nakuru County, Kenya.
