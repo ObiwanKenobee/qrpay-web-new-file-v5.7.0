@@ -23,6 +23,10 @@ The reassessor must be a different user and membership from the original issuer,
 
 A new active evidence mandate is required for the same evidence and original scope. The prior mandate cannot be reused. A no-conflict declaration must be recorded for the new mandate. Existing private evidence integrity verification runs before the new attestation is created.
 
+The transaction locks authorization rows in this order: institution, reassessing membership, source attestation, then mandate. This is the same governance order used by M010 correction handling. It prevents a source correction or institution-status change from racing the reassessment snapshot or creating a lock-order inversion.
+
+The source attestation is locked before its latest revision is read. The link therefore records the exact source version and active/revoked state considered at the transaction's serialization point.
+
 If any check fails, no new attestation or relationship record is retained.
 
 ## Participant history
