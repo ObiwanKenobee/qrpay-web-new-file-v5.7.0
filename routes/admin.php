@@ -46,6 +46,7 @@ use App\Http\Controllers\Admin\SendMoneyController;
 use App\Http\Controllers\Admin\ServerInfoController;
 use App\Http\Controllers\Admin\SanctumScanEvidenceReviewController;
 use App\Http\Controllers\Admin\SanctumScanVerifierRegistryController;
+use App\Http\Controllers\Admin\SanctumScanUserIdentityReviewController;
 use App\Http\Controllers\Admin\SetupBillPayController;
 use App\Http\Controllers\Admin\SetupEmailController;
 use App\Http\Controllers\Admin\EmailTemplateController;
@@ -95,6 +96,17 @@ Route::name('admin.')->group(function () {
     });
 
     Route::middleware(['web', 'auth:admin', 'app.mode', 'admin.role.guard','admin.google.two.factor'])->group(function(){
+        // Manual buyer identity checks are restricted by the same admin, role and 2FA middleware as verifier governance.
+        Route::controller(SanctumScanUserIdentityReviewController::class)
+            ->prefix('sanctum/identity-checks')
+            ->name('sanctum.identity-checks.')
+            ->group(function () {
+                Route::get('/', 'index')->name('index');
+                Route::get('/gate', 'showGate')->name('gate.show');
+                Route::put('/gate', 'updateGate')->name('gate.update');
+                Route::post('/{userId}', 'store')->whereNumber('userId')->name('store');
+            });
+
         // Private dispute evidence review; access is governed by admin role permissions.
         Route::controller(SanctumScanEvidenceReviewController::class)
             ->prefix('sanctum/evidence')
