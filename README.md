@@ -1279,7 +1279,7 @@ See [ADR 0011](docs/architecture/decisions/0011-independent-attestation-reassess
 **Milestones 012–014 — Participant provenance export and offline verification (integration pending)**
 
 - Participant-scoped provenance export, the offline manifest verifier and verifier consistency hardening have been implemented on the dependent branch `sanctum-scan/provenance-verifier-hardening-014`.
-- Those changes are not yet integrated into `main`; the branch has diverged and requires a separately reviewed integration change. See [the engineering roadmap](docs/architecture/roadmap.md) for the exact branch state.
+- Those changes are not yet integrated into `main`; the branch has diverged and is under draft integration review in [PR #17](https://github.com/ObiwanKenobee/qrpay-web-new-file-v5.7.0/pull/17). It remains unmerged. See [the engineering roadmap](docs/architecture/roadmap.md) for the exact branch state.
 
 **Milestone 015 — Manual buyer identity review and optional acceptance gate (PR #16)**
 
