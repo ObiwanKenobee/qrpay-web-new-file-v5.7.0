@@ -2,6 +2,7 @@
 
 namespace App\Services\SanctumScan;
 
+use App\Models\Admin\BasicSettings;
 use App\Models\SanctumScanUserIdentityCheck;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -47,26 +48,25 @@ class UserIdentityCheckManager
                 ->firstOrFail();
 
             $check = SanctumScanUserIdentityCheck::create([
-                'user_id'              => $userId,
-                'method'               => $method,
-                'reference'            => $reference ? trim($reference) : null,
-                'review_status'        => $status,
-                'summary'              => trim($summary),
+                'user_id' => $userId,
+                'method' => $method,
+                'reference' => $reference !== null && trim($reference) !== '' ? trim($reference) : null,
+                'review_status' => $status,
+                'summary' => trim($summary),
                 'reviewed_by_admin_id' => $adminId,
-                'reviewed_at'          => now(),
-                'created_at'           => now(),
+                'reviewed_at' => now(),
+                'created_at' => now(),
             ]);
 
-            // Stamp the user row so the buyer gate can use a single indexed column.
+            // The user row is the current-state projection; the check above remains the immutable history.
             if ($status === 'verified') {
                 $user->forceFill([
-                    'identity_verified_at'          => now(),
-                    'identity_verification_method'  => $method,
+                    'identity_verified_at' => now(),
+                    'identity_verification_method' => $method,
                 ])->save();
-            } elseif ($user->identity_verified_at !== null) {
-                // A subsequent rejected or unable_to_verify check clears the stamp.
+            } else {
                 $user->forceFill([
-                    'identity_verified_at'         => null,
+                    'identity_verified_at' => null,
                     'identity_verification_method' => null,
                 ])->save();
             }
@@ -84,17 +84,26 @@ class UserIdentityCheckManager
     }
 
     /**
-     * Returns true when the gate is enabled and the user has not been verified.
-     * Returns false when the gate is disabled or the user is verified (allow through).
+     * Must be called inside the exchange-acceptance transaction.
+     * Lock settings before the buyer so gate changes and identity reviews serialize
+     * against the acceptance decision. The merchant never calls this method.
      */
     public function buyerIsBlocked(User $user): bool
     {
-        $gateEnabled = (bool) optional(\App\Models\Admin\BasicSettings::first())->sanctum_exchange_identity_gate;
+        $settings = BasicSettings::query()
+            ->lockForUpdate()
+            ->first();
 
-        if (! $gateEnabled) {
+        if (! (bool) ($settings?->sanctum_exchange_identity_gate ?? false)) {
             return false;
         }
 
-        return $user->identity_verified_at === null;
+        $currentBuyer = User::query()
+            ->whereKey($user->getKey())
+            ->whereNull('deleted_at')
+            ->lockForUpdate()
+            ->first();
+
+        return $currentBuyer === null || $currentBuyer->identity_verified_at === null;
     }
 }
