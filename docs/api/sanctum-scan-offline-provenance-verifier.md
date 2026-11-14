@@ -23,6 +23,10 @@ An absolute file path or a path relative to the Laravel project root may be supp
 - Evidence digest bindings for platform reviews and institutional attestations.
 - Sequential attestation revisions, predecessor links, evidence digest binding and terminal withdrawal.
 - Both directions of each reassessment link, including the exact prior revision, version and status.
+- A platform review status of `pending`, `verified`, `rejected` or `unable_to_verify`; completed reviews must include a matching evidence digest, method, summary and timestamp.
+- The attestation's current effective snapshot must exactly match version 1 or its latest revision, including status, scope, method, outcome, basis summary and recorded timestamp.
+- Reassessment references must use valid positive integer versions and IDs, identify the exact prior revision, and cannot point back to the same attestation.
+- Event and dispute-message identifiers must be unique, with non-empty type, actor and recorded-time fields.
 
 ## Exit behavior
 
@@ -34,7 +38,7 @@ An absolute file path or a path relative to the Laravel project root may be supp
 ```text
 Provenance manifest verified.
 SHA-256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-Checks: manifest_format, schema_version, manifest_digest, evidence_hash_binding, attestation_revision_chains, reassessment_links, event_and_message_structure
+Checks: manifest_format, schema_version, manifest_digest, evidence_hash_binding, platform_review_structure, attestation_revision_chains, attestation_current_projection, reassessment_link_types, reassessment_links, event_and_message_structure
 ```
 
 The digest above is illustrative only.
