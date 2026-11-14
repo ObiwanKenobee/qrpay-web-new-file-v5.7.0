@@ -24,6 +24,9 @@ class ProvenanceManifestVerifierTest extends TestCase
         $this->assertTrue($result['valid']);
         $this->assertSame([], $result['errors']);
         $this->assertContains('manifest_digest', $result['checks']);
+        $this->assertContains('platform_review_structure', $result['checks']);
+        $this->assertContains('attestation_current_projection', $result['checks']);
+        $this->assertContains('reassessment_link_types', $result['checks']);
         $this->assertSame($document['manifest']['content_sha256'], $result['content_sha256']);
     }
 
