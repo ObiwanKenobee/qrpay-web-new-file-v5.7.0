@@ -1,6 +1,12 @@
 name: Sanctum Scan PHP lint and feature tests
 
 on:
+  push:
+    branches:
+      - 'sanctum-scan/**'
+    paths:
+      - '**/*.php'
+      - '.github/workflows/sanctum-scan-php-lint.yml'
   pull_request:
     branches:
       - main
@@ -31,10 +37,28 @@ jobs:
       - name: Lint changed PHP files
         env:
           BASE_REF: ${{ github.base_ref }}
+          BASE_SHA: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
         shell: bash
         run: |
-          git fetch origin "$BASE_REF" --depth=1
-          mapfile -t php_files < <(git diff --diff-filter=ACMRT --name-only "origin/$BASE_REF...HEAD" -- '*.php')
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF" --depth=1
+            DIFF_RANGE="origin/$BASE_REF...HEAD"
+          elif [[ "$BASE_SHA" =~ ^0{40}$ ]]; then
+            echo "Initial branch push detected; comparing with the default branch."
+            git fetch origin "main:refs/remotes/origin/main" --depth=1
+            DIFF_RANGE="origin/main...HEAD"
+          else
+            DIFF_RANGE="$BASE_SHA...HEAD"
+          fi
+
+          php_files_path="$RUNNER_TEMP/sanctum-scan-php-files"
+          if ! git diff --diff-filter=ACMRT --name-only -z "$DIFF_RANGE" -- '*.php' > "$php_files_path"; then
+            echo "Unable to determine changed PHP files for diff range: $DIFF_RANGE"
+            exit 1
+          fi
+
+          mapfile -d '' -t php_files < "$php_files_path"
 
           if [[ ${#php_files[@]} -eq 0 ]]; then
             echo "No changed PHP files to lint."

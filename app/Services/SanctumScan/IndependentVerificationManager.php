@@ -13,6 +13,7 @@ use App\Models\SanctumScanVerifierCredentialReview;
 use App\Models\SanctumScanVerifierConflictDeclaration;
 use App\Models\SanctumScanAttestationAppeal;
 use App\Models\SanctumScanAttestationAppealDecision;
+use App\Models\SanctumScanAttestationRevision;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -556,6 +557,255 @@ class IndependentVerificationManager
         });
     }
 
+
+
+    public const REVISION_REASONS = [
+        'factual_error',
+        'methodology_error',
+        'new_evidence',
+        'conflict_discovered',
+        'credential_issue',
+        'evidence_integrity',
+        'other',
+    ];
+
+    public function reviseAttestation(
+        int $membershipId,
+        int $attestationId,
+        int $userId,
+        string $action,
+        ?string $method,
+        ?string $outcome,
+        ?string $basisSummary,
+        string $reasonCode,
+        string $reasonSummary
+    ): SanctumScanAttestationRevision|string {
+        if (
+            ! in_array($action, ['corrected', 'revoked'], true) ||
+            ! in_array($reasonCode, self::REVISION_REASONS, true)
+        ) {
+            return 'invalid_attestation_revision';
+        }
+
+        if (
+            $action === 'corrected' &&
+            (
+                ! in_array($method, self::METHODS, true) ||
+                ! in_array($outcome, self::OUTCOMES, true) ||
+                trim((string) $basisSummary) === ''
+            )
+        ) {
+            return 'invalid_attestation_revision';
+        }
+
+        return DB::transaction(function () use (
+            $membershipId,
+            $attestationId,
+            $userId,
+            $action,
+            $method,
+            $outcome,
+            $basisSummary,
+            $reasonCode,
+            $reasonSummary
+        ) {
+            // A correction must serialize against institution, membership and
+            // mandate governance writes. Read the immutable institution reference
+            // first, then lock rows in the established institution -> membership
+            // -> attestation -> mandate order. Withdrawals deliberately skip the
+            // institution and membership status locks so an issuer can still take
+            // the protective action after governance eligibility changes.
+            $attestationReference = SanctumScanIndependentAttestation::query()
+                ->select(['id', 'institution_id'])
+                ->whereKey($attestationId)
+                ->firstOrFail();
+
+            $institution = null;
+            $membership = null;
+
+            if ($action === 'corrected') {
+                $institution = SanctumScanVerifierInstitution::query()
+                    ->whereKey($attestationReference->institution_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $institution || $institution->status !== 'active') {
+                    return 'revision_not_authorized';
+                }
+
+                $membership = SanctumScanVerifierMembership::query()
+                    ->whereKey($membershipId)
+                    ->where('user_id', $userId)
+                    ->where('institution_id', $institution->getKey())
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $membership || $membership->status !== 'active') {
+                    return 'revision_not_authorized';
+                }
+            }
+
+            $attestation = SanctumScanIndependentAttestation::query()
+                ->with(['evidence.dispute.exchange', 'mandate'])
+                ->whereKey($attestationId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (
+                (int) $attestation->membership_id !== $membershipId ||
+                (int) $attestation->verifier_user_id !== $userId ||
+                (int) $attestation->institution_id !== (int) $attestationReference->institution_id
+            ) {
+                return 'revision_not_authorized';
+            }
+
+            $userIsActive = User::query()
+                ->whereKey($userId)
+                ->where('status', true)
+                ->where('email_verified', true)
+                ->where('sms_verified', true)
+                ->exists();
+
+            if (! $userIsActive) {
+                return 'revision_not_authorized';
+            }
+
+            $membership = $membership ?? SanctumScanVerifierMembership::query()
+                ->whereKey($membershipId)
+                ->where('user_id', $userId)
+                ->first();
+
+            if (
+                ! $membership ||
+                (int) $membership->institution_id !== (int) $attestation->institution_id
+            ) {
+                return 'revision_not_authorized';
+            }
+
+            $latest = SanctumScanAttestationRevision::query()
+                ->where('attestation_id', $attestationId)
+                ->orderByDesc('version_number')
+                ->lockForUpdate()
+                ->first();
+
+            if ($latest && $latest->revision_action === 'revoked') {
+                return 'attestation_already_revoked';
+            }
+
+            if ($action === 'corrected') {
+                $mandate = SanctumScanEvidenceVerificationMandate::query()
+                    ->whereKey($attestation->mandate_id)
+                    ->where('evidence_id', $attestation->evidence_id)
+                    ->where('institution_id', $attestation->institution_id)
+                    ->where('verification_scope', $attestation->verification_scope)
+                    ->whereIn('status', ['active', 'completed'])
+                    ->lockForUpdate()
+                    ->first();
+
+                if (
+                    ! $mandate ||
+                    ($mandate->status === 'active' && $mandate->expires_at?->isPast())
+                ) {
+                    return 'revision_not_authorized';
+                }
+
+                $readinessIssue = $this->verificationReadinessIssue($mandate, $membershipId, true);
+
+                if ($readinessIssue !== null) {
+                    return $readinessIssue;
+                }
+
+                if (! $this->evidence->fileIntegrityIsValid($attestation->evidence)) {
+                    return 'evidence_integrity_failure';
+                }
+            }
+
+            if (! $attestation->evidence || $attestation->evidence->sha256 !== $attestation->evidence_sha256) {
+                return 'attestation_evidence_mismatch';
+            }
+
+            $effective = [
+                'verification_scope' => $latest?->verification_scope ?? $attestation->verification_scope,
+                'verification_method' => $latest?->verification_method ?? $attestation->verification_method,
+                'outcome' => $latest?->outcome ?? $attestation->outcome,
+                'basis_summary' => $latest?->basis_summary ?? $attestation->basis_summary,
+            ];
+
+            if ($action === 'corrected') {
+                $effective = [
+                    'verification_scope' => $attestation->verification_scope,
+                    'verification_method' => $method,
+                    'outcome' => $outcome,
+                    'basis_summary' => trim((string) $basisSummary),
+                ];
+            }
+
+            $revision = SanctumScanAttestationRevision::create([
+                'attestation_id' => $attestationId,
+                'evidence_id' => $attestation->evidence_id,
+                'previous_revision_id' => $latest?->getKey(),
+                'version_number' => ($latest?->version_number ?? 1) + 1,
+                'evidence_sha256' => $attestation->evidence_sha256,
+                'revision_action' => $action,
+                'verification_scope' => $effective['verification_scope'],
+                'verification_method' => $effective['verification_method'],
+                'outcome' => $effective['outcome'],
+                'basis_summary' => $effective['basis_summary'],
+                'reason_code' => $reasonCode,
+                'reason_summary' => trim($reasonSummary),
+                'recorded_by_guard' => 'api',
+                'recorded_by_id' => $userId,
+                'recorded_at' => now(),
+                'created_at' => now(),
+            ]);
+
+            $eventName = $action === 'corrected' ? 'attestation_corrected' : 'attestation_revoked';
+            $this->record(
+                'attestation_revision',
+                (int) $revision->getKey(),
+                $eventName,
+                'api',
+                $userId,
+                [
+                    'attestation_id' => $attestationId,
+                    'evidence_id' => $attestation->evidence_id,
+                    'evidence_sha256' => $attestation->evidence_sha256,
+                    'version_number' => $revision->version_number,
+                    'previous_revision_id' => $revision->previous_revision_id,
+                    'revision_action' => $action,
+                    'reason_code' => $reasonCode,
+                ]
+            );
+
+            $exchange = $attestation->evidence?->dispute?->exchange;
+
+            if ($exchange) {
+                $this->events->record(
+                    $exchange,
+                    $action === 'corrected'
+                        ? 'external_verifier_attestation_corrected'
+                        : 'external_verifier_attestation_revoked',
+                    $action === 'corrected'
+                        ? 'The issuing verifier appended a correction to an independent attestation.'
+                        : 'The issuing verifier withdrew an independent attestation.',
+                    'api',
+                    $userId,
+                    $action === 'corrected' ? 'external_corrected' : 'external_revoked',
+                    [
+                        'attestation_id' => $attestationId,
+                        'revision_id' => $revision->getKey(),
+                        'evidence_id' => $attestation->evidence_id,
+                        'evidence_sha256' => $attestation->evidence_sha256,
+                        'version_number' => $revision->version_number,
+                        'revision_action' => $action,
+                        'reason_code' => $reasonCode,
+                    ]
+                );
+            }
+
+            return $revision;
+        });
+    }
 
     public function recordCredentialReview(
         int $institutionId,

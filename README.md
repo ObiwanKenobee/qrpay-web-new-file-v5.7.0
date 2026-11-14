@@ -1255,6 +1255,16 @@ See docs/architecture/decisions/0008-independent-verifier-mandates-and-attestati
 
 See [ADR 0009](docs/architecture/decisions/0009-verifier-credentials-conflicts-and-appeals.md) and [the governance API guide](docs/api/sanctum-scan-verifier-governance.md).
 
+**Milestone 010 — Versioned attestation corrections and withdrawal**
+
+- The original institutional attestation remains immutable as version 1. Each correction or withdrawal appends a new version linked to the previous revision and bound to the original evidence SHA-256.
+- Only the original verifier user and recorded membership may revise that attestation. Corrections require an active institution and membership, current M9 credentials, a no-conflict declaration, an eligible mandate and intact private evidence. Eligibility is serialized against concurrent governance changes using row locks.
+- A verifier can withdraw their own attestation even after the mandate or institution/membership eligibility ends, or a conflict/credential issue is discovered. Withdrawal does not require the evidence object to remain readable and is terminal.
+- Participant evidence responses preserve the original statement and expose the effective version, active/revoked state and complete revision chain.
+- Revisions append verifier-registry and exchange-timeline events without altering the underlying dispute, exchange, payment, wallet, refund or settlement state.
+
+See [ADR 0010](docs/architecture/decisions/0010-versioned-attestation-revisions.md) and [the revision API guide](docs/api/sanctum-scan-attestation-revisions.md).
+
 **Project:** Atlas Sanctum — Sanctum Scan.
 
 **Initial geographic research context:** Nakuru County, Kenya.
