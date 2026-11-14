@@ -22,7 +22,7 @@
 | 021 | Public, anonymised economic intelligence snapshots | Planned | Not started |
 | 022 | Developer SDK and open protocol package | Planned | Not started |
 
-**Important branch distinction:** PRs #13–#15 were merged into their dependent feature branches. That does not mean those changes are present in `main`. The cumulative M012–M014 branch has diverged from the current mainline and requires a separately reviewed integration change. Do not advance M015 into a release claim until the provenance stack has been reconciled.
+**Important branch distinction:** PRs #13–#15 were merged into their dependent feature branches. That does not mean those changes are present in `main`. The cumulative M012–M014 branch has diverged from the current mainline and is under draft integration review in PR #17. It remains unmerged. Do not advance M015 into a release claim until the provenance stack has been reconciled.
 
 ## Current engineering principle
 
