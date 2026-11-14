@@ -35,6 +35,7 @@ class BasicSettings extends Model
         'user_pin_verification'         => 'boolean',
         'agent_pin_verification'        => 'boolean',
         'merchant_pin_verification'     => 'boolean',
+        'sanctum_exchange_identity_gate' => 'boolean',
         'storage_config' => 'object',
     ];
 
