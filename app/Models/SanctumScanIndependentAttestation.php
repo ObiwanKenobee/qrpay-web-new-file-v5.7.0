@@ -75,7 +75,9 @@ class SanctumScanIndependentAttestation extends Model
 
     public function reassessments(): HasMany
     {
-        return $this->hasMany(SanctumScanAttestationReassessment::class, 'prior_attestation_id');
+        return $this->hasMany(SanctumScanAttestationReassessment::class, 'prior_attestation_id')
+            ->orderBy('recorded_at')
+            ->orderBy('id');
     }
 
     public function reassessmentOf(): HasOne
