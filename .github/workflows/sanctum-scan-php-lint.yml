@@ -83,6 +83,16 @@ jobs:
       - name: Prepare application key
         run: php artisan key:generate --force
 
+      - name: Run offline provenance verifier unit tests
+        env:
+          APP_ENV: testing
+        run: vendor/bin/phpunit tests/Unit/SanctumScan/ProvenanceManifestVerifierTest.php
+
+      - name: Run offline provenance verifier command tests
+        env:
+          APP_ENV: testing
+        run: vendor/bin/phpunit tests/Feature/SanctumScan/ProvenanceManifestVerifierCommandTest.php
+
       - name: Run Sanctum Scan feature tests
         env:
           APP_ENV: testing

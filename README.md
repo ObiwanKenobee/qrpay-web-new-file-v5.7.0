@@ -1276,6 +1276,43 @@ See [ADR 0010](docs/architecture/decisions/0010-versioned-attestation-revisions.
 
 See [ADR 0011](docs/architecture/decisions/0011-independent-attestation-reassessment.md) and [the reassessment API guide](docs/api/sanctum-scan-attestation-reassessments.md).
 
+**Milestone 012 — Participant-scoped provenance export**
+
+- Buyer and merchant participants can retrieve a read-only JSON provenance manifest for their exchange dispute.
+- The export combines the exchange and dispute snapshots, participant dispute messages, evidence metadata and SHA-256 digests, platform review, independent attestations, revision/reassessment/appeal history, and a filtered exchange event timeline.
+- A manifest records the schema version, generation time, hash algorithm and SHA-256 digest of the `data` object. The generation timestamp is deliberately outside the hashed content.
+- Actor IDs, private file storage keys, raw event payloads and payment references are excluded. Uploaded evidence bytes remain available only through existing participant-scoped, integrity-checked download routes.
+- Both buyer and merchant receive the same underlying data snapshot and content digest. Access remains scoped to the authenticated exchange participant.
+- Exporting a manifest does not alter exchange, dispute, payment, wallet, refund or settlement state.
+
+Buyer endpoint: `GET /api/user/sanctum/exchanges/{exchangeId}/dispute/evidence/provenance`.
+
+Merchant endpoint: `GET /merchant-api/merchant/sanctum/exchanges/{exchangeId}/dispute/evidence/provenance`.
+
+See [ADR 0012](docs/architecture/decisions/0012-participant-provenance-export.md) and [the provenance export API guide](docs/api/sanctum-scan-provenance-export.md).
+
+**Milestone 013 — Offline provenance manifest verification**
+
+- Adds an offline verifier for saved M012 JSON exports; it does not make network requests or require a platform account.
+- Validates the manifest format and schema version, the SHA-256 digest over the `data` object, evidence/review/attestation digest bindings, sequential revision history, terminal withdrawal state, and both sides of reassessment links.
+- Exposes the verifier as `php artisan sanctum-scan:verify-provenance path/to/export.json`.
+- Rejects unsupported schema versions, malformed JSON, oversized files, tampered content and inconsistent evidence relationships.
+- Adds unit and command tests, plus CI steps for both test groups.
+- A successful verification establishes internal consistency of the saved export against its declared digest and schema. It does not prove who created the export, when it was created, or whether any underlying claim is true.
+
+See [ADR 0013](docs/architecture/decisions/0013-offline-provenance-verification.md) and [the offline verifier guide](docs/api/sanctum-scan-offline-provenance-verifier.md).
+
+**Milestone 014 — Provenance verifier consistency hardening**
+
+- Validates platform-review states and requires completed review records to carry the exact evidence SHA-256 digest.
+- Verifies that each attestation's current snapshot matches the original statement or the latest immutable revision, including scope, method, outcome, basis summary, status, version and recorded timestamp.
+- Rejects malformed reassessment version references instead of coercing loosely numeric strings, and prevents self-referential reassessment links.
+- Requires non-empty provenance actor/type/timestamp fields and unique message/event identifiers.
+- Adds focused unit tests for inconsistent current projections, incomplete platform reviews and malformed reassessment version values.
+- These checks improve structural consistency only; a manifest digest remains neither a digital signature nor proof of authorship or factual truth.
+
+See [ADR 0014](docs/architecture/decisions/0014-provenance-verifier-consistency-hardening.md) and the [offline verifier guide](docs/api/sanctum-scan-offline-provenance-verifier.md).
+
 **Project:** Atlas Sanctum — Sanctum Scan.
 
 **Initial geographic research context:** Nakuru County, Kenya.
