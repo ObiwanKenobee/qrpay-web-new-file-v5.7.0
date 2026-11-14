@@ -123,6 +123,49 @@ class SanctumScanDisputeEvidenceController extends Controller
         ], 201);
     }
 
+
+    public function provenanceExport(
+        Request $request,
+        int $exchangeId,
+        DisputeEvidenceManager $evidence
+    ): JsonResponse {
+        [$guard, $actorId] = $this->actor($request);
+
+        $context = $evidence->provenanceContextForParticipant($exchangeId, $guard, $actorId);
+        $items = $evidence->listForParticipant($exchangeId, $guard, $actorId);
+
+        $data = [
+            'exchange' => $context['exchange'],
+            'dispute' => $context['dispute'],
+            'evidence' => $items
+                ->map(fn (SanctumScanExchangeDisputeEvidence $item) => $this->present($item))
+                ->values()
+                ->all(),
+            'events' => $context['events'],
+        ];
+
+        $canonicalData = json_encode(
+            $data,
+            JSON_UNESCAPED_SLASHES
+                | JSON_UNESCAPED_UNICODE
+                | JSON_INVALID_UTF8_SUBSTITUTE
+                | JSON_PRESERVE_ZERO_FRACTION
+                | JSON_THROW_ON_ERROR
+        );
+
+        return response()->json([
+            'manifest' => [
+                'format' => 'sanctum-scan-participant-provenance',
+                'schema_version' => '1.0.0',
+                'generated_at' => now()->toIso8601String(),
+                'hash_algorithm' => 'SHA-256',
+                'hash_scope' => 'data',
+                'content_sha256' => hash('sha256', $canonicalData),
+            ],
+            'data' => $data,
+        ]);
+    }
+
     private function actor(Request $request): array
     {
         if ($request->is('merchant-api/merchant/*')) {

@@ -877,6 +877,102 @@ class EconomicExchangeLifecycleTest extends TestCase
             ->assertUnauthorized();
     }
 
+
+    public function test_exchange_participants_can_export_a_hashed_provenance_manifest_without_private_storage_or_actor_identifiers(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        $merchant = $this->makeMerchant('provenance-seller', 'Provenance Seller');
+        $buyer = $this->makeBuyer('provenance-buyer');
+        $outsider = $this->makeBuyer('provenance-outsider');
+        $resource = $this->makeResource($merchant);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+        $exchangeId = $offer['id'];
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->assertOk();
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute', [
+                'category' => 'quality_concern',
+                'statement' => 'The delivered batch requires an auditable quality review.',
+            ])
+            ->assertCreated();
+
+        $this->actingAs($buyer, 'api')
+            ->post('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence', [
+                'evidence_type' => 'quality_record',
+                'caption' => 'Participant supplied quality record.',
+                'file' => UploadedFile::fake()->createWithContent(
+                    'quality-record.pdf',
+                    '%PDF-1.4 private provenance test'
+                ),
+            ], ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        $evidence = SanctumScanExchangeDisputeEvidence::query()->firstOrFail();
+        $this->assertSame('local', $evidence->storage_disk);
+        Storage::disk('local')->assertExists($evidence->storage_path);
+
+        $path = '/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence/provenance';
+        $buyerExport = $this->actingAs($buyer, 'api')
+            ->getJson($path)
+            ->assertOk()
+            ->assertJsonPath('manifest.format', 'sanctum-scan-participant-provenance')
+            ->assertJsonPath('manifest.schema_version', '1.0.0')
+            ->assertJsonPath('manifest.hash_algorithm', 'SHA-256')
+            ->assertJsonPath('manifest.hash_scope', 'data')
+            ->assertJsonPath('data.exchange.id', $exchangeId)
+            ->assertJsonPath('data.dispute.category', 'quality_concern')
+            ->assertJsonPath('data.evidence.0.id', $evidence->getKey())
+            ->assertJsonPath('data.evidence.0.sha256', $evidence->sha256)
+            ->assertJsonPath('data.evidence.0.verification.status', 'pending');
+
+        $payload = $buyerExport->json('data');
+        $canonicalData = json_encode(
+            $payload,
+            JSON_UNESCAPED_SLASHES
+                | JSON_UNESCAPED_UNICODE
+                | JSON_INVALID_UTF8_SUBSTITUTE
+                | JSON_PRESERVE_ZERO_FRACTION
+                | JSON_THROW_ON_ERROR
+        );
+        $this->assertSame(
+            hash('sha256', $canonicalData),
+            $buyerExport->json('manifest.content_sha256')
+        );
+
+        $this->assertStringNotContainsString($evidence->storage_path, $buyerExport->getContent());
+        $this->assertArrayNotHasKey('buyer_user_id', $payload['exchange']);
+        $this->assertArrayNotHasKey('merchant_id', $payload['exchange']);
+        $this->assertArrayNotHasKey('storage_path', $payload['evidence'][0]);
+        $this->assertArrayNotHasKey('storage_disk', $payload['evidence'][0]);
+        $this->assertArrayNotHasKey('event_data', $payload['events'][0]);
+        $this->assertArrayNotHasKey('recorded_by_id', $payload['events'][0]);
+        $this->assertTrue(collect($payload['events'])->contains(
+            fn (array $event) => $event['type'] === 'dispute_evidence_submitted'
+        ));
+
+        $merchantExport = $this->actingAs($merchant, 'merchant_api')
+            ->getJson('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute/evidence/provenance')
+            ->assertOk();
+
+        $this->assertSame(
+            $buyerExport->json('manifest.content_sha256'),
+            $merchantExport->json('manifest.content_sha256')
+        );
+        $this->assertSame($payload, $merchantExport->json('data'));
+
+        $this->actingAs($outsider, 'api')
+            ->getJson($path)
+            ->assertNotFound();
+
+        $this->app['auth']->forgetGuards();
+        $this->getJson($path)->assertUnauthorized();
+    }
+
     public function test_duplicate_dispute_evidence_is_rejected(): void
     {
         Storage::fake('local');

@@ -1276,6 +1276,21 @@ See [ADR 0010](docs/architecture/decisions/0010-versioned-attestation-revisions.
 
 See [ADR 0011](docs/architecture/decisions/0011-independent-attestation-reassessment.md) and [the reassessment API guide](docs/api/sanctum-scan-attestation-reassessments.md).
 
+**Milestone 012 — Participant-scoped provenance export**
+
+- Buyer and merchant participants can retrieve a read-only JSON provenance manifest for their exchange dispute.
+- The export combines the exchange and dispute snapshots, participant dispute messages, evidence metadata and SHA-256 digests, platform review, independent attestations, revision/reassessment/appeal history, and a filtered exchange event timeline.
+- A manifest records the schema version, generation time, hash algorithm and SHA-256 digest of the `data` object. The generation timestamp is deliberately outside the hashed content.
+- Actor IDs, private file storage keys, raw event payloads and payment references are excluded. Uploaded evidence bytes remain available only through existing participant-scoped, integrity-checked download routes.
+- Both buyer and merchant receive the same underlying data snapshot and content digest. Access remains scoped to the authenticated exchange participant.
+- Exporting a manifest does not alter exchange, dispute, payment, wallet, refund or settlement state.
+
+Buyer endpoint: `GET /api/user/sanctum/exchanges/{exchangeId}/dispute/evidence/provenance`.
+
+Merchant endpoint: `GET /merchant-api/merchant/sanctum/exchanges/{exchangeId}/dispute/evidence/provenance`.
+
+See [ADR 0012](docs/architecture/decisions/0012-participant-provenance-export.md) and [the provenance export API guide](docs/api/sanctum-scan-provenance-export.md).
+
 **Project:** Atlas Sanctum — Sanctum Scan.
 
 **Initial geographic research context:** Nakuru County, Kenya.
