@@ -1291,6 +1291,17 @@ Merchant endpoint: `GET /merchant-api/merchant/sanctum/exchanges/{exchangeId}/di
 
 See [ADR 0012](docs/architecture/decisions/0012-participant-provenance-export.md) and [the provenance export API guide](docs/api/sanctum-scan-provenance-export.md).
 
+**Milestone 013 — Offline provenance manifest verification**
+
+- Adds an offline verifier for saved M012 JSON exports; it does not make network requests or require a platform account.
+- Validates the manifest format and schema version, the SHA-256 digest over the `data` object, evidence/review/attestation digest bindings, sequential revision history, terminal withdrawal state, and both sides of reassessment links.
+- Exposes the verifier as `php artisan sanctum-scan:verify-provenance path/to/export.json`.
+- Rejects unsupported schema versions, malformed JSON, oversized files, tampered content and inconsistent evidence relationships.
+- Adds unit and command tests, plus CI steps for both test groups.
+- A successful verification establishes internal consistency of the saved export against its declared digest and schema. It does not prove who created the export, when it was created, or whether any underlying claim is true.
+
+See [ADR 0013](docs/architecture/decisions/0013-offline-provenance-verification.md) and [the offline verifier guide](docs/api/sanctum-scan-offline-provenance-verifier.md).
+
 **Project:** Atlas Sanctum — Sanctum Scan.
 
 **Initial geographic research context:** Nakuru County, Kenya.
