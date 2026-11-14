@@ -10,6 +10,7 @@ use App\Models\SanctumScanExchangeDispute;
 use App\Models\SanctumScanExchangeDisputeMessage;
 use App\Models\SanctumScanResource;
 use App\Models\User;
+use App\Models\SanctumScanUserIdentityCheck;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -17,6 +18,7 @@ use App\Models\SanctumScanExchangeDisputeEvidence;
 use App\Models\SanctumScanExchangeEvidenceReview;
 use App\Services\SanctumScan\DisputeEvidenceManager;
 use App\Services\SanctumScan\IndependentVerificationManager;
+use App\Services\SanctumScan\UserIdentityCheckManager;
 use App\Models\SanctumScanIndependentAttestation;
 use App\Models\SanctumScanVerifierRegistryEvent;
 use App\Models\SanctumScanVerifierCredentialReview;
@@ -68,6 +70,12 @@ class EconomicExchangeLifecycleTest extends TestCase
             $table->string('email')->nullable()->unique();
             $table->string('password')->nullable();
             $table->boolean('status')->default(true);
+            $table->timestamps();
+        });
+
+        Schema::create('basic_settings', function (Blueprint $table) {
+            $table->id();
+            $table->boolean('merchant_pin_verification')->default(false);
             $table->timestamps();
         });
 
@@ -128,6 +136,13 @@ class EconomicExchangeLifecycleTest extends TestCase
         $attestationRevisionMigration->up();
         $attestationReassessmentMigration = require base_path('database/migrations/2026_11_13_177000_create_sanctum_scan_attestation_reassessments_table.php');
         $attestationReassessmentMigration->up();
+
+        $identityUserMigration = require base_path('database/migrations/2026_11_14_100000_add_identity_verification_to_users_table.php');
+        $identityUserMigration->up();
+        $identityGateMigration = require base_path('database/migrations/2026_11_14_100100_add_sanctum_exchange_identity_gate_to_basic_settings.php');
+        $identityGateMigration->up();
+        $identityChecksMigration = require base_path('database/migrations/2026_11_14_100200_create_sanctum_scan_user_identity_checks_table.php');
+        $identityChecksMigration->up();
 
         // Keep Passport authentication, participant status and 2FA checks active.
         // Disable only environment-dependent maintenance, PIN and global KYC gates.
@@ -2221,8 +2236,123 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->assertSame(0, SanctumScanIndependentAttestation::query()->count());
     }
 
+    public function test_identity_gate_runs_on_buyer_acceptance_without_disclosing_status_to_merchant(): void
+    {
+        DB::table('basic_settings')->insert([
+            'merchant_pin_verification' => false,
+            'sanctum_exchange_identity_gate' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $merchant = $this->makeMerchant('identity-gate-seller', 'Identity Gate Seller');
+        $buyer = $this->makeBuyer('identity-gate-buyer');
+        $resource = $this->makeResource($merchant);
+
+        // An unverified buyer may still receive an offer. The merchant must not
+        // learn the buyer's private identity-review state during offer creation.
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+        $exchangeId = (int) $offer['id'];
+        $merchantPayload = json_encode($offer['response']->json('data.exchange'));
+
+        $this->assertIsString($merchantPayload);
+        $this->assertStringNotContainsString('identity_verified_at', $merchantPayload);
+        $this->assertStringNotContainsString('identity_verification_method', $merchantPayload);
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->assertForbidden()
+            ->assertJsonPath('error.code', 'buyer_identity_unverified');
+
+        $this->assertSame(
+            'offered',
+            SanctumScanExchange::query()->findOrFail($exchangeId)->status,
+            'A blocked acceptance must not mutate the exchange or append an acceptance event.'
+        );
+        $this->assertSame(
+            0,
+            SanctumScanExchangeEvent::query()
+                ->where('exchange_id', $exchangeId)
+                ->where('event_type', 'offer_accepted')
+                ->count()
+        );
+
+        $manager = app(UserIdentityCheckManager::class);
+        $check = $manager->record(
+            (int) $buyer->getKey(),
+            $this->makeAdminForVerification('identity-gate'),
+            'national_id_review',
+            'CASE-NKR-IDENTITY-001',
+            'verified',
+            'The authorized administrator reviewed the identity evidence and confirmed the account holder.'
+        );
+
+        $this->assertInstanceOf(SanctumScanUserIdentityCheck::class, $check);
+        $this->assertNotNull($buyer->fresh()->identity_verified_at);
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->assertOk()
+            ->assertJsonPath('data.exchange.status', 'accepted');
+    }
+
+    public function test_identity_review_history_is_append_only_and_latest_nonverified_result_clears_current_status(): void
+    {
+        $buyer = $this->makeBuyer('identity-history-buyer');
+        $manager = app(UserIdentityCheckManager::class);
+        $adminId = $this->makeAdminForVerification('identity-history');
+
+        $verified = $manager->record(
+            (int) $buyer->getKey(),
+            $adminId,
+            'passport_review',
+            'CASE-NKR-IDENTITY-002',
+            'verified',
+            'The passport review was completed and the account identity was confirmed.'
+        );
+
+        $this->assertInstanceOf(SanctumScanUserIdentityCheck::class, $verified);
+        $this->assertNotNull($buyer->fresh()->identity_verified_at);
+
+        $rejected = $manager->record(
+            (int) $buyer->getKey(),
+            $adminId,
+            'passport_review',
+            'CASE-NKR-IDENTITY-003',
+            'unable_to_verify',
+            'The follow-up review could not confirm the submitted identity evidence.'
+        );
+
+        $this->assertInstanceOf(SanctumScanUserIdentityCheck::class, $rejected);
+        $this->assertNull($buyer->fresh()->identity_verified_at);
+        $this->assertNull($buyer->fresh()->identity_verification_method);
+        $this->assertSame(2, SanctumScanUserIdentityCheck::query()->where('user_id', $buyer->getKey())->count());
+        $this->assertSame(
+            ['unable_to_verify', 'verified'],
+            $manager->checksForUser((int) $buyer->getKey())->pluck('review_status')->all()
+        );
+
+        try {
+            $verified->forceFill(['summary' => 'An attempted rewrite of the original immutable review.'])->save();
+            $this->fail('Identity review history must not be updated.');
+        } catch (\LogicException $exception) {
+            $this->assertSame('Identity check records are immutable.', $exception->getMessage());
+        }
+
+        try {
+            $rejected->delete();
+            $this->fail('Identity review history must not be deleted.');
+        } catch (\LogicException $exception) {
+            $this->assertSame('Identity check records cannot be deleted.', $exception->getMessage());
+        }
+
+        $this->assertSame(2, SanctumScanUserIdentityCheck::query()->where('user_id', $buyer->getKey())->count());
+    }
+
     protected function tearDown(): void
     {
+        Schema::dropIfExists('sanctum_scan_user_identity_checks');
+        Schema::dropIfExists('basic_settings');
         Schema::dropIfExists('sanctum_scan_attestation_reassessments');
         Schema::dropIfExists('sanctum_scan_attestation_revisions');
         Schema::dropIfExists('sanctum_scan_attestation_appeal_decisions');
