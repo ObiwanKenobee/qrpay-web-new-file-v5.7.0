@@ -38,7 +38,7 @@ An absolute file path or a path relative to the Laravel project root may be supp
 ```text
 Provenance manifest verified.
 SHA-256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-Checks: manifest_format, schema_version, manifest_digest, evidence_hash_binding, attestation_revision_chains, reassessment_links, event_and_message_structure
+Checks: manifest_format, schema_version, manifest_digest, evidence_hash_binding, platform_review_structure, attestation_revision_chains, attestation_current_projection, reassessment_link_types, reassessment_links, event_and_message_structure
 ```
 
 The digest above is illustrative only.
