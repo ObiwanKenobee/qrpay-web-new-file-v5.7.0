@@ -1331,6 +1331,18 @@ class EconomicExchangeLifecycleTest extends TestCase
         $exchangeId = $context['exchange_id'];
         $priorAttestationId = $context['attestation_id'];
         $priorAttestation = SanctumScanIndependentAttestation::query()->findOrFail($priorAttestationId);
+        $priorRevision = $manager->reviseAttestation(
+            (int) $originalMembership->getKey(),
+            $priorAttestationId,
+            (int) $verifier->getKey(),
+            'corrected',
+            'document_review',
+            'corroborated',
+            'The original observation basis was clarified while preserving the original attestation record.',
+            'factual_error',
+            'The issuer corrected a wording issue before the independent reassessment.'
+        );
+        $this->assertInstanceOf(SanctumScanAttestationRevision::class, $priorRevision);
 
         $exchangeStatus = DB::table('sanctum_scan_exchanges')
             ->where('id', $exchangeId)
@@ -1419,8 +1431,8 @@ class EconomicExchangeLifecycleTest extends TestCase
             ])
             ->assertCreated()
             ->assertJsonPath('data.reassessment.prior_attestation_id', $priorAttestationId)
-            ->assertJsonPath('data.reassessment.prior_revision_id', null)
-            ->assertJsonPath('data.reassessment.prior_version_number', 1)
+            ->assertJsonPath('data.reassessment.prior_revision_id', $priorRevision->getKey())
+            ->assertJsonPath('data.reassessment.prior_version_number', 2)
             ->assertJsonPath('data.reassessment.prior_status', 'active')
             ->assertJsonPath('data.attestation.outcome', 'not_corroborated')
             ->assertJsonPath('data.attestation.membership_id', $newMembership->getKey());
@@ -1450,7 +1462,8 @@ class EconomicExchangeLifecycleTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.evidence.0.independent_attestations.0.id', $priorAttestationId)
             ->assertJsonPath('data.evidence.0.independent_attestations.0.reassessments.0.reassessment_attestation_id', $newAttestationId)
-            ->assertJsonPath('data.evidence.0.independent_attestations.0.reassessments.0.prior_version_number', 1)
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.reassessments.0.prior_revision_id', $priorRevision->getKey())
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.reassessments.0.prior_version_number', 2)
             ->assertJsonPath('data.evidence.0.independent_attestations.1.id', $newAttestationId)
             ->assertJsonPath('data.evidence.0.independent_attestations.1.reassessment_of.prior_attestation_id', $priorAttestationId);
 
