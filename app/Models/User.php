@@ -41,6 +41,8 @@ class User extends Authenticatable
         'email_verified'        => 'integer',
         'sms_verified'          => 'integer',
         'kyc_verified'          => 'integer',
+        'identity_verified_at'   => 'immutable_datetime',
+        'identity_verification_method' => 'string',
         'ver_code'              => 'integer',
         'ver_code_send_at'      => 'datetime',
         'two_factor_verified'   => 'integer',
