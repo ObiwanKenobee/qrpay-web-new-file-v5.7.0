@@ -56,3 +56,4 @@ The authenticated API user is the reassessor. The request carries only method, o
 - Current institution and exact-scope verifier credentials, a new no-conflict declaration and intact evidence are mandatory.
 - The link and the new attestation are append-only; both the original attestation and its M10 revision chain remain immutable.
 - The reassessment references the exact source version visible at the time it was recorded.
+- The reassessment transaction locks rows in the shared governance order: institution → reassessing membership → source attestation → mandate. This serializes institution suspension and source corrections with reassessment without reversing the M010 correction lock order.
