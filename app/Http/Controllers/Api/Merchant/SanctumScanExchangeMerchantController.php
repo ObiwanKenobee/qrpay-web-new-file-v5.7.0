@@ -9,6 +9,7 @@ use App\Models\SanctumScanExchangePaymentEvidence;
 use App\Models\SanctumScanResource;
 use App\Models\User;
 use App\Services\SanctumScan\ExchangeEventRecorder;
+use App\Services\SanctumScan\UserIdentityCheckManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -86,6 +87,10 @@ class SanctumScanExchangeMerchantController extends Controller
                 return false;
             }
 
+            if (app(UserIdentityCheckManager::class)->buyerIsBlocked($buyer)) {
+                return 'buyer_identity_unverified';
+            }
+
             $unit = trim((string) ($validated['unit'] ?? $resource->unit));
 
             if ($unit === '') {
@@ -152,6 +157,15 @@ class SanctumScanExchangeMerchantController extends Controller
                 'error' => [
                     'code' => 'buyer_unavailable',
                     'message' => 'The buyer account could not be found or is not active.',
+                ],
+            ], 422);
+        }
+
+        if ($exchange === 'buyer_identity_unverified') {
+            return response()->json([
+                'error' => [
+                    'code' => 'buyer_identity_unverified',
+                    'message' => 'The buyer account has not completed the required identity verification.',
                 ],
             ], 422);
         }
