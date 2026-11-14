@@ -609,6 +609,42 @@ class IndependentVerificationManager
             $reasonCode,
             $reasonSummary
         ) {
+            // A correction must serialize against institution, membership and
+            // mandate governance writes. Read the immutable institution reference
+            // first, then lock rows in the established institution -> membership
+            // -> attestation -> mandate order. Withdrawals deliberately skip the
+            // institution and membership status locks so an issuer can still take
+            // the protective action after governance eligibility changes.
+            $attestationReference = SanctumScanIndependentAttestation::query()
+                ->select(['id', 'institution_id'])
+                ->whereKey($attestationId)
+                ->firstOrFail();
+
+            $institution = null;
+            $membership = null;
+
+            if ($action === 'corrected') {
+                $institution = SanctumScanVerifierInstitution::query()
+                    ->whereKey($attestationReference->institution_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $institution || $institution->status !== 'active') {
+                    return 'revision_not_authorized';
+                }
+
+                $membership = SanctumScanVerifierMembership::query()
+                    ->whereKey($membershipId)
+                    ->where('user_id', $userId)
+                    ->where('institution_id', $institution->getKey())
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $membership || $membership->status !== 'active') {
+                    return 'revision_not_authorized';
+                }
+            }
+
             $attestation = SanctumScanIndependentAttestation::query()
                 ->with(['evidence.dispute.exchange', 'mandate'])
                 ->whereKey($attestationId)
@@ -617,7 +653,8 @@ class IndependentVerificationManager
 
             if (
                 (int) $attestation->membership_id !== $membershipId ||
-                (int) $attestation->verifier_user_id !== $userId
+                (int) $attestation->verifier_user_id !== $userId ||
+                (int) $attestation->institution_id !== (int) $attestationReference->institution_id
             ) {
                 return 'revision_not_authorized';
             }
@@ -633,7 +670,7 @@ class IndependentVerificationManager
                 return 'revision_not_authorized';
             }
 
-            $membership = SanctumScanVerifierMembership::query()
+            $membership = $membership ?? SanctumScanVerifierMembership::query()
                 ->whereKey($membershipId)
                 ->where('user_id', $userId)
                 ->first();
@@ -656,10 +693,6 @@ class IndependentVerificationManager
             }
 
             if ($action === 'corrected') {
-                if ($membership->status !== 'active') {
-                    return 'revision_not_authorized';
-                }
-
                 $mandate = SanctumScanEvidenceVerificationMandate::query()
                     ->whereKey($attestation->mandate_id)
                     ->where('evidence_id', $attestation->evidence_id)
@@ -673,15 +706,6 @@ class IndependentVerificationManager
                     ! $mandate ||
                     ($mandate->status === 'active' && $mandate->expires_at?->isPast())
                 ) {
-                    return 'revision_not_authorized';
-                }
-
-                $institutionIsActive = SanctumScanVerifierInstitution::query()
-                    ->whereKey($attestation->institution_id)
-                    ->where('status', 'active')
-                    ->exists();
-
-                if (! $institutionIsActive) {
                     return 'revision_not_authorized';
                 }
 
