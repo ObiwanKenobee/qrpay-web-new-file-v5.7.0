@@ -9,6 +9,7 @@ use App\Models\Merchants\Merchant;
 use App\Models\SanctumScanResource;
 use App\Models\User;
 use App\Services\SanctumScan\ExchangeEventRecorder;
+use App\Services\SanctumScan\UserIdentityCheckManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -38,11 +39,12 @@ class SanctumScanExchangeController extends Controller
     public function accept(
         Request $request,
         int $exchangeId,
-        ExchangeEventRecorder $events
+        ExchangeEventRecorder $events,
+        UserIdentityCheckManager $identityChecks
     ): JsonResponse {
         $buyer = $request->user('api');
 
-        $exchange = DB::transaction(function () use ($buyer, $exchangeId, $events) {
+        $exchange = DB::transaction(function () use ($buyer, $exchangeId, $events, $identityChecks) {
             $exchange = SanctumScanExchange::query()
                 ->whereKey($exchangeId)
                 ->where('buyer_user_id', $buyer->getKey())
@@ -55,6 +57,10 @@ class SanctumScanExchangeController extends Controller
 
             if ($exchange->status !== 'offered') {
                 return null;
+            }
+
+            if ($identityChecks->buyerIsBlocked($buyer)) {
+                return 'buyer_identity_unverified';
             }
 
             $merchantIsActive = Merchant::query()
@@ -108,6 +114,15 @@ class SanctumScanExchangeController extends Controller
 
         if ($exchange === 'expired') {
             return $this->stateError('offer_expired', 'This offer has expired.');
+        }
+
+        if ($exchange === 'buyer_identity_unverified') {
+            return response()->json([
+                'error' => [
+                    'code' => 'buyer_identity_unverified',
+                    'message' => 'Your account must complete the required identity review before you can accept this offer.',
+                ],
+            ], 403);
         }
 
         if ($exchange === 'withdrawn') {
