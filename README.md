@@ -1302,6 +1302,17 @@ See [ADR 0012](docs/architecture/decisions/0012-participant-provenance-export.md
 
 See [ADR 0013](docs/architecture/decisions/0013-offline-provenance-verification.md) and [the offline verifier guide](docs/api/sanctum-scan-offline-provenance-verifier.md).
 
+**Milestone 014 — Provenance verifier consistency hardening**
+
+- Validates platform-review states and requires completed review records to carry the exact evidence SHA-256 digest.
+- Verifies that each attestation's current snapshot matches the original statement or the latest immutable revision, including scope, method, outcome, basis summary, status, version and recorded timestamp.
+- Rejects malformed reassessment version references instead of coercing loosely numeric strings, and prevents self-referential reassessment links.
+- Requires non-empty provenance actor/type/timestamp fields and unique message/event identifiers.
+- Adds focused unit tests for inconsistent current projections, incomplete platform reviews and malformed reassessment version values.
+- These checks improve structural consistency only; a manifest digest remains neither a digital signature nor proof of authorship or factual truth.
+
+See [ADR 0014](docs/architecture/decisions/0014-provenance-verifier-consistency-hardening.md) and the [offline verifier guide](docs/api/sanctum-scan-offline-provenance-verifier.md).
+
 **Project:** Atlas Sanctum — Sanctum Scan.
 
 **Initial geographic research context:** Nakuru County, Kenya.
