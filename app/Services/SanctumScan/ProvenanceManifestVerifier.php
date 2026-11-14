@@ -367,6 +367,12 @@ final class ProvenanceManifestVerifier
                 }
 
                 $reverse = $attestation['reassessment_of'] ?? null;
+                if (! array_key_exists('reassessment_of', $attestation)
+                    || ($reverse !== null && ! is_array($reverse))) {
+                    $errors[] = "Attestation {$attestationId} must contain a null or object reassessment_of value.";
+                    continue;
+                }
+
                 if (is_array($reverse)) {
                     if (! $this->isPositiveInteger($reverse['id'] ?? null)
                         || ! $this->isPositiveInteger($reverse['prior_attestation_id'] ?? null)
