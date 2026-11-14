@@ -42,13 +42,23 @@ jobs:
         shell: bash
         run: |
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            git fetch origin "$BASE_REF" --depth=1
+            git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF" --depth=1
             DIFF_RANGE="origin/$BASE_REF...HEAD"
+          elif [[ "$BASE_SHA" =~ ^0{40}$ ]]; then
+            echo "Initial branch push detected; comparing with the default branch."
+            git fetch origin "main:refs/remotes/origin/main" --depth=1
+            DIFF_RANGE="origin/main...HEAD"
           else
             DIFF_RANGE="$BASE_SHA...HEAD"
           fi
 
-          mapfile -t php_files < <(git diff --diff-filter=ACMRT --name-only "$DIFF_RANGE" -- '*.php')
+          php_files_path="$RUNNER_TEMP/sanctum-scan-php-files"
+          if ! git diff --diff-filter=ACMRT --name-only -z "$DIFF_RANGE" -- '*.php' > "$php_files_path"; then
+            echo "Unable to determine changed PHP files for diff range: $DIFF_RANGE"
+            exit 1
+          fi
+
+          mapfile -d '' -t php_files < "$php_files_path"
 
           if [[ ${#php_files[@]} -eq 0 ]]; then
             echo "No changed PHP files to lint."
