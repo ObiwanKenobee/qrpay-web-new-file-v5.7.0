@@ -14,6 +14,7 @@ use App\Models\SanctumScanVerifierConflictDeclaration;
 use App\Models\SanctumScanAttestationAppeal;
 use App\Models\SanctumScanAttestationAppealDecision;
 use App\Models\SanctumScanAttestationRevision;
+use App\Models\SanctumScanAttestationReassessment;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -558,6 +559,192 @@ class IndependentVerificationManager
     }
 
 
+
+    /**
+     * Record a fresh institutional assessment that is explicitly linked to an
+     * earlier attestation. This never edits or inherits the earlier issuer's record.
+     */
+    public function reassessAttestation(
+        int $membershipId,
+        int $priorAttestationId,
+        int $userId,
+        string $method,
+        string $outcome,
+        string $summary,
+        string $reasonSummary
+    ): SanctumScanAttestationReassessment|string {
+        if (
+            ! in_array($method, self::METHODS, true) ||
+            ! in_array($outcome, self::OUTCOMES, true) ||
+            trim($summary) === '' ||
+            trim($reasonSummary) === ''
+        ) {
+            return 'invalid_attestation_reassessment';
+        }
+
+        return DB::transaction(function () use (
+            $membershipId,
+            $priorAttestationId,
+            $userId,
+            $method,
+            $outcome,
+            $summary,
+            $reasonSummary
+        ) {
+            // Use the same lock order as attestation corrections and governance writers:
+            // institution -> membership -> source attestation -> mandate.
+            // Read only the institution reference first; the source row itself is
+            // locked only after the governance rows, avoiding a correction/reassessment
+            // lock inversion.
+            $priorReference = SanctumScanIndependentAttestation::query()
+                ->select(['id', 'institution_id'])
+                ->whereKey($priorAttestationId)
+                ->firstOrFail();
+
+            $institution = SanctumScanVerifierInstitution::query()
+                ->whereKey($priorReference->institution_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($institution->status !== 'active') {
+                return 'verification_not_authorized';
+            }
+
+            $membership = SanctumScanVerifierMembership::query()
+                ->whereKey($membershipId)
+                ->where('user_id', $userId)
+                ->where('institution_id', $institution->getKey())
+                ->where('status', 'active')
+                ->lockForUpdate()
+                ->first();
+
+            if (! $membership) {
+                return 'reassessment_not_authorized';
+            }
+
+            $prior = SanctumScanIndependentAttestation::query()
+                ->with('evidence.dispute.exchange')
+                ->whereKey($priorAttestationId)
+                ->where('institution_id', $institution->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (
+                (int) $membership->getKey() === (int) $prior->membership_id ||
+                (int) $userId === (int) $prior->verifier_user_id
+            ) {
+                return 'reassessment_not_authorized';
+            }
+
+            $mandate = $this->authorizedMandate(
+                $membershipId,
+                (int) $prior->evidence_id,
+                $userId,
+                $prior->verification_scope,
+                true
+            );
+
+            if (! $mandate) {
+                return 'verification_not_authorized';
+            }
+
+            if ((int) $mandate->getKey() === (int) $prior->mandate_id) {
+                return 'reassessment_requires_new_mandate';
+            }
+
+            if (
+                ! $prior->evidence ||
+                (int) $prior->evidence->getKey() !== (int) $prior->evidence_id ||
+                $prior->evidence->sha256 !== $prior->evidence_sha256
+            ) {
+                return 'attestation_evidence_mismatch';
+            }
+
+            $priorRevision = SanctumScanAttestationRevision::query()
+                ->where('attestation_id', $priorAttestationId)
+                ->orderByDesc('version_number')
+                ->first();
+
+            // The prior issuer's current revision is captured as the exact subject
+            // of this reassessment. A withdrawal remains visible and is not undone.
+            $priorVersion = $priorRevision?->version_number ?? 1;
+            $priorStatus = $priorRevision?->revision_action === 'revoked' ? 'revoked' : 'active';
+
+            $newAttestation = $this->attest(
+                $membershipId,
+                (int) $prior->evidence_id,
+                $userId,
+                $prior->verification_scope,
+                $method,
+                $outcome,
+                $summary
+            );
+
+            if (is_string($newAttestation)) {
+                return $newAttestation;
+            }
+
+            $link = SanctumScanAttestationReassessment::create([
+                'prior_attestation_id' => $priorAttestationId,
+                'prior_revision_id' => $priorRevision?->getKey(),
+                'reassessment_attestation_id' => $newAttestation->getKey(),
+                'evidence_id' => $prior->evidence_id,
+                'institution_id' => $prior->institution_id,
+                'reassessed_by_membership_id' => $membershipId,
+                'reassessed_by_user_id' => $userId,
+                'prior_version_number' => $priorVersion,
+                'prior_status' => $priorStatus,
+                'evidence_sha256' => $prior->evidence_sha256,
+                'reason_summary' => trim($reasonSummary),
+                'recorded_at' => now(),
+                'created_at' => now(),
+            ]);
+
+            $this->record(
+                'attestation_reassessment',
+                (int) $link->getKey(),
+                'attestation_reassessed',
+                'api',
+                $userId,
+                [
+                    'prior_attestation_id' => $priorAttestationId,
+                    'prior_revision_id' => $priorRevision?->getKey(),
+                    'prior_version_number' => $priorVersion,
+                    'prior_status' => $priorStatus,
+                    'reassessment_attestation_id' => $newAttestation->getKey(),
+                    'evidence_id' => $prior->evidence_id,
+                    'institution_id' => $prior->institution_id,
+                    'membership_id' => $membershipId,
+                    'evidence_sha256' => $prior->evidence_sha256,
+                ]
+            );
+
+            $exchange = $prior->evidence?->dispute?->exchange;
+
+            if ($exchange) {
+                $this->events->record(
+                    $exchange,
+                    'external_verifier_attestation_reassessed',
+                    'A different authorized member of the same institution recorded a fresh, separately attributable assessment of an earlier attestation.',
+                    'api',
+                    $userId,
+                    'external_reassessment_recorded',
+                    [
+                        'reassessment_id' => $link->getKey(),
+                        'prior_attestation_id' => $priorAttestationId,
+                        'prior_revision_id' => $priorRevision?->getKey(),
+                        'prior_version_number' => $priorVersion,
+                        'prior_status' => $priorStatus,
+                        'reassessment_attestation_id' => $newAttestation->getKey(),
+                        'evidence_id' => $prior->evidence_id,
+                        'evidence_sha256' => $prior->evidence_sha256,
+                    ]
+                );
+            }
+
+            return $link->fresh(['reassessmentAttestation.institution']);
+        });
+    }
 
     public const REVISION_REASONS = [
         'factual_error',

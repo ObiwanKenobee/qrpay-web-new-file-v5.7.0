@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use LogicException;
 
 class SanctumScanIndependentAttestation extends Model
@@ -70,5 +71,17 @@ class SanctumScanIndependentAttestation extends Model
     {
         return $this->hasMany(SanctumScanAttestationRevision::class, 'attestation_id')
             ->orderBy('version_number');
+    }
+
+    public function reassessments(): HasMany
+    {
+        return $this->hasMany(SanctumScanAttestationReassessment::class, 'prior_attestation_id')
+            ->orderBy('recorded_at')
+            ->orderBy('id');
+    }
+
+    public function reassessmentOf(): HasOne
+    {
+        return $this->hasOne(SanctumScanAttestationReassessment::class, 'reassessment_attestation_id');
     }
 }

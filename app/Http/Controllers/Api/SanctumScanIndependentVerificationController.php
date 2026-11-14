@@ -122,6 +122,67 @@ class SanctumScanIndependentVerificationController extends Controller
         ], 201);
     }
 
+    public function reassessAttestation(
+        Request $request,
+        int $membershipId,
+        int $attestationId,
+        IndependentVerificationManager $manager
+    ): JsonResponse {
+        $user = $request->user('api');
+        abort_unless($user, 401);
+
+        $validated = $request->validate([
+            'verification_method' => 'required|in:document_review,source_cross_check,site_inspection,direct_confirmation,other',
+            'outcome' => 'required|in:corroborated,not_corroborated,unable_to_assess',
+            'basis_summary' => 'required|string|min:20|max:2000',
+            'reason_summary' => 'required|string|min:20|max:2000',
+        ]);
+
+        $result = $manager->reassessAttestation(
+            $membershipId,
+            $attestationId,
+            (int) $user->getKey(),
+            $validated['verification_method'],
+            $validated['outcome'],
+            $validated['basis_summary'],
+            $validated['reason_summary']
+        );
+
+        if (is_string($result)) {
+            return $this->error($result);
+        }
+
+        $attestation = $result->reassessmentAttestation;
+
+        return response()->json([
+            'data' => [
+                'reassessment' => [
+                    'id' => $result->getKey(),
+                    'prior_attestation_id' => $result->prior_attestation_id,
+                    'prior_revision_id' => $result->prior_revision_id,
+                    'prior_version_number' => $result->prior_version_number,
+                    'prior_status' => $result->prior_status,
+                    'reassessment_attestation_id' => $result->reassessment_attestation_id,
+                    'evidence_sha256' => $result->evidence_sha256,
+                    'reason_summary' => $result->reason_summary,
+                    'recorded_at' => $result->recorded_at?->toIso8601String(),
+                ],
+                'attestation' => [
+                    'id' => $attestation?->getKey(),
+                    'institution_id' => $attestation?->institution_id,
+                    'institution_name' => $attestation?->institution?->name,
+                    'membership_id' => $attestation?->membership_id,
+                    'verification_scope' => $attestation?->verification_scope,
+                    'verification_method' => $attestation?->verification_method,
+                    'outcome' => $attestation?->outcome,
+                    'basis_summary' => $attestation?->basis_summary,
+                    'evidence_sha256' => $attestation?->evidence_sha256,
+                    'attested_at' => $attestation?->attested_at?->toIso8601String(),
+                ],
+            ],
+        ], 201);
+    }
+
     public function correctAttestation(
         Request $request,
         int $membershipId,
@@ -305,6 +366,9 @@ class SanctumScanIndependentVerificationController extends Controller
             'invalid_credential_scope' => [422, 'The credential scope is not valid for the selected subject.'],
             'credential_subject_mismatch' => [422, 'The verifier membership does not belong to this institution.'],
             'invalid_attestation_revision' => [422, 'The revision action or supplied verification fields are not supported.'],
+            'invalid_attestation_reassessment' => [422, 'The reassessment method, outcome or explanation is not supported.'],
+            'reassessment_not_authorized' => [403, 'A different active member of the same institution must issue the reassessment.'],
+            'reassessment_requires_new_mandate' => [409, 'A reassessment requires a separate, newly issued evidence mandate.'],
             'revision_not_authorized' => [403, 'Only the original verifier with the recorded membership can revise this attestation.'],
             'attestation_evidence_mismatch' => [409, 'The original evidence digest no longer matches the attestation record.'],
             'attestation_already_revoked' => [409, 'This attestation has already been withdrawn and cannot be revised further.'],
