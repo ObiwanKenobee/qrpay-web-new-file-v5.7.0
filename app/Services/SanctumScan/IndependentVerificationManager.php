@@ -591,21 +591,45 @@ class IndependentVerificationManager
             $summary,
             $reasonSummary
         ) {
-            $prior = SanctumScanIndependentAttestation::query()
-                ->with('evidence.dispute.exchange')
+            // Use the same lock order as attestation corrections and governance writers:
+            // institution -> membership -> source attestation -> mandate.
+            // Read only the institution reference first; the source row itself is
+            // locked only after the governance rows, avoiding a correction/reassessment
+            // lock inversion.
+            $priorReference = SanctumScanIndependentAttestation::query()
+                ->select(['id', 'institution_id'])
                 ->whereKey($priorAttestationId)
+                ->firstOrFail();
+
+            $institution = SanctumScanVerifierInstitution::query()
+                ->whereKey($priorReference->institution_id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            if ($institution->status !== 'active') {
+                return 'verification_not_authorized';
+            }
 
             $membership = SanctumScanVerifierMembership::query()
                 ->whereKey($membershipId)
                 ->where('user_id', $userId)
-                ->where('institution_id', $prior->institution_id)
+                ->where('institution_id', $institution->getKey())
                 ->where('status', 'active')
+                ->lockForUpdate()
                 ->first();
 
+            if (! $membership) {
+                return 'reassessment_not_authorized';
+            }
+
+            $prior = SanctumScanIndependentAttestation::query()
+                ->with('evidence.dispute.exchange')
+                ->whereKey($priorAttestationId)
+                ->where('institution_id', $institution->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
             if (
-                ! $membership ||
                 (int) $membership->getKey() === (int) $prior->membership_id ||
                 (int) $userId === (int) $prior->verifier_user_id
             ) {
