@@ -345,6 +345,24 @@ class ProvenanceManifestVerifierTest extends TestCase
         $this->assertNotEmpty($matchingErrors);
     }
 
+    public function test_it_rejects_a_malformed_reverse_reassessment_record(): void
+    {
+        $document = $this->document();
+        $digest = $document['data']['evidence'][0]['sha256'];
+        $attestation = $this->baseAttestation($digest, 11);
+        $attestation['reassessment_of'] = 'not-an-object';
+        $document['data']['evidence'][0]['independent_attestations'] = [$attestation];
+        $document = $this->refreshDigest($document);
+
+        $result = $this->verifier->verifyJson($this->encodeDocument($document));
+
+        $this->assertFalse($result['valid']);
+        $this->assertContains(
+            'Attestation 11 must contain a null or object reassessment_of value.',
+            $result['errors']
+        );
+    }
+
     private function baseAttestation(string $digest, int $id): array
     {
         $timestamp = '2026-11-13T18:00:00+03:00';
