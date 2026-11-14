@@ -15,6 +15,9 @@ class SanctumScanUserIdentityReviewController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        $admin = $request->user('admin');
+        abort_unless($admin && $admin->status, 403);
+
         $validated = $request->validate([
             'user_id' => 'sometimes|nullable|integer|min:1',
         ]);
@@ -83,8 +86,11 @@ class SanctumScanUserIdentityReviewController extends Controller
         ], 201);
     }
 
-    public function showGate(): JsonResponse
+    public function showGate(Request $request): JsonResponse
     {
+        $admin = $request->user('admin');
+        abort_unless($admin && $admin->status, 403);
+
         $settings = BasicSettings::query()->first();
 
         if (! $settings) {
