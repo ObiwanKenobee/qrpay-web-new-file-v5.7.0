@@ -1397,6 +1397,76 @@ class EconomicExchangeLifecycleTest extends TestCase
             ->exists());
     }
 
+    public function test_issuer_can_withdraw_after_membership_and_institution_suspension_but_cannot_correct(): void
+    {
+        $context = $this->makeGovernedAttestationForRevision('suspended-withdrawal');
+        $manager = $context['manager'];
+        $verifier = $context['verifier'];
+        $membership = $context['membership'];
+        $institution = $context['institution'];
+        $evidence = $context['evidence'];
+        $attestationId = $context['attestation_id'];
+        $exchangeId = $context['exchange_id'];
+        $adminId = $context['admin_id'];
+        $attestation = SanctumScanIndependentAttestation::query()->findOrFail($attestationId);
+
+        $manager->setMembershipStatus(
+            (int) $membership->getKey(),
+            $adminId,
+            'suspended'
+        );
+        $manager->setInstitutionStatus(
+            (int) $institution->getKey(),
+            $adminId,
+            'suspended'
+        );
+
+        $this->assertSame('suspended', $membership->fresh()->status);
+        $this->assertSame('suspended', $institution->fresh()->status);
+        $this->assertSame('revoked', $context['mandate']->fresh()->status);
+
+        $correctionPath = '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
+            . '/attestations/' . $attestationId . '/corrections';
+
+        $this->actingAs($verifier, 'api')
+            ->postJson($correctionPath, [
+                'verification_method' => 'source_cross_check',
+                'outcome' => 'not_corroborated',
+                'basis_summary' => 'A later source cross-check changes the original quality conclusion.',
+                'reason_code' => 'new_evidence',
+                'reason_summary' => 'A new source record materially changes the conclusion after the verifier membership was suspended.',
+            ])
+            ->assertForbidden()
+            ->assertJsonPath('error.code', 'revision_not_authorized');
+
+        // A protective withdrawal must remain available even though governance
+        // eligibility and the original mandate have since been suspended/revoked.
+        $revocationPath = '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
+            . '/attestations/' . $attestationId . '/revocation';
+
+        $this->actingAs($verifier, 'api')
+            ->postJson($revocationPath, [
+                'reason_code' => 'credential_issue',
+                'reason_summary' => 'The issuer is withdrawing its prior statement after the institution and membership were suspended.',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.revision.version_number', 2)
+            ->assertJsonPath('data.revision.revision_action', 'revoked');
+
+        $this->assertSame('corroborated', $attestation->fresh()->outcome);
+        $this->assertSame(1, SanctumScanAttestationRevision::query()
+            ->where('attestation_id', $attestationId)
+            ->count());
+        $this->assertSame('accepted', SanctumScanExchange::query()->findOrFail($exchangeId)->status);
+        $this->assertSame('open', SanctumScanExchangeDispute::query()->firstOrFail()->status);
+
+        $this->actingAs($context['buyer'], 'api')
+            ->getJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence')
+            ->assertOk()
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.current.status', 'revoked')
+            ->assertJsonPath('data.evidence.0.independent_attestations.0.current.version_number', 2);
+    }
+
     public function test_verifier_account_must_remain_active_and_verified_when_accepting_an_invitation(): void
     {
         $verifier = $this->makeBuyer('unverified-verifier-account');
