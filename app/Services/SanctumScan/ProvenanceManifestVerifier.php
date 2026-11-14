@@ -156,10 +156,30 @@ final class ProvenanceManifestVerifier
                 continue;
             }
 
-            $reviewDigest = $evidence['verification']['evidence_sha256'] ?? null;
-            if ($reviewDigest !== null
-                && (! $this->isDigest($reviewDigest) || ! hash_equals($evidenceDigest, $reviewDigest))) {
-                $errors[] = "Evidence {$evidenceId} has a platform review digest mismatch.";
+            $verification = $evidence['verification'] ?? null;
+            if (! is_array($verification)) {
+                $errors[] = "Evidence {$evidenceId} must contain a platform verification object.";
+            } else {
+                $reviewStatus = $verification['status'] ?? null;
+                if (! in_array($reviewStatus, ['pending', 'verified', 'rejected', 'unable_to_verify'], true)) {
+                    $errors[] = "Evidence {$evidenceId} has an unsupported platform review status.";
+                } elseif ($reviewStatus === 'pending') {
+                    if (array_key_exists('evidence_sha256', $verification) && $verification['evidence_sha256'] !== null) {
+                        $errors[] = "Pending evidence {$evidenceId} must not claim a completed review digest.";
+                    }
+                } else {
+                    $reviewDigest = $verification['evidence_sha256'] ?? null;
+                    if (! $this->isDigest($reviewDigest) || ! hash_equals($evidenceDigest, $reviewDigest)) {
+                        $errors[] = "Evidence {$evidenceId} has a platform review digest mismatch.";
+                    }
+
+                    foreach (['method', 'summary', 'reviewed_at'] as $field) {
+                        if (! is_string($verification[$field] ?? null) || trim($verification[$field]) === '') {
+                            $errors[] = "Evidence {$evidenceId} has an incomplete platform review record.";
+                            break;
+                        }
+                    }
+                }
             }
 
             $attestations = $evidence['independent_attestations'] ?? null;
@@ -182,6 +202,12 @@ final class ProvenanceManifestVerifier
                     $errors[] = "Attestation id {$attestationId} appears more than once for evidence {$evidenceId}.";
                 }
                 $attestationMap[$attestationId] = $attestation;
+
+                foreach (['verification_scope', 'verification_method', 'outcome', 'basis_summary', 'attested_at'] as $field) {
+                    if (! is_string($attestation[$field] ?? null) || trim($attestation[$field]) === '') {
+                        $errors[] = "Attestation {$attestationId} is missing its original {$field} value.";
+                    }
+                }
 
                 if (! $this->isDigest($attestation['evidence_sha256'] ?? null)
                     || ! hash_equals($evidenceDigest, (string) $attestation['evidence_sha256'])) {
@@ -225,6 +251,13 @@ final class ProvenanceManifestVerifier
                         $errors[] = "Attestation {$attestationId} revision {$revisionId} has an unsupported action.";
                     }
 
+                    foreach (['verification_scope', 'verification_method', 'outcome', 'basis_summary', 'recorded_at'] as $field) {
+                        if (! is_string($revision[$field] ?? null) || trim($revision[$field]) === '') {
+                            $errors[] = "Attestation {$attestationId} revision {$revisionId} is missing its {$field} value.";
+                            break;
+                        }
+                    }
+
                     if (! $this->isDigest($revision['evidence_sha256'] ?? null)
                         || ! hash_equals($evidenceDigest, (string) $revision['evidence_sha256'])) {
                         $errors[] = "Attestation {$attestationId} revision {$revisionId} is bound to a different evidence digest.";
@@ -241,14 +274,31 @@ final class ProvenanceManifestVerifier
 
                 $current = $attestation['current'] ?? null;
                 $expectedCurrentVersion = $expectedVersion - 1;
-                $expectedCurrentStatus = ($revisions !== [] && ($revisions[array_key_last($revisions)]['revision_action'] ?? null) === 'revoked')
+                $lastRevision = $revisions !== [] && is_array($revisions[array_key_last($revisions)])
+                    ? $revisions[array_key_last($revisions)]
+                    : [];
+                $expectedCurrentStatus = ($lastRevision['revision_action'] ?? null) === 'revoked'
                     ? 'revoked'
                     : 'active';
+                $expectedCurrentProjection = [
+                    'status' => $expectedCurrentStatus,
+                    'verification_scope' => $lastRevision['verification_scope'] ?? ($attestation['verification_scope'] ?? null),
+                    'verification_method' => $lastRevision['verification_method'] ?? ($attestation['verification_method'] ?? null),
+                    'outcome' => $lastRevision['outcome'] ?? ($attestation['outcome'] ?? null),
+                    'basis_summary' => $lastRevision['basis_summary'] ?? ($attestation['basis_summary'] ?? null),
+                    'recorded_at' => $lastRevision['recorded_at'] ?? ($attestation['attested_at'] ?? null),
+                ];
 
                 if (! is_array($current)
-                    || (int) ($current['version_number'] ?? 0) !== $expectedCurrentVersion
-                    || ($current['status'] ?? null) !== $expectedCurrentStatus) {
+                    || ! $this->isPositiveInteger($current['version_number'] ?? null)
+                    || (int) $current['version_number'] !== $expectedCurrentVersion) {
                     $errors[] = "Attestation {$attestationId} current state does not match its revision history.";
+                } else {
+                    foreach ($expectedCurrentProjection as $field => $expectedValue) {
+                        if (($current[$field] ?? null) !== $expectedValue) {
+                            $errors[] = "Attestation {$attestationId} current {$field} projection does not match its source statement.";
+                        }
+                    }
                 }
 
                 $attestation['_verified_revision_by_version'] = $revisionByVersion;
@@ -273,12 +323,25 @@ final class ProvenanceManifestVerifier
                 foreach ($reassessmentLinks as $link) {
                     if (! is_array($link)
                         || ! $this->isPositiveInteger($link['id'] ?? null)
-                        || ! $this->isPositiveInteger($link['reassessment_attestation_id'] ?? null)) {
+                        || ! $this->isPositiveInteger($link['reassessment_attestation_id'] ?? null)
+                        || ! $this->isPositiveInteger($link['prior_version_number'] ?? null)
+                        || ! in_array($link['prior_status'] ?? null, ['active', 'revoked'], true)) {
                         $errors[] = "Attestation {$attestationId} contains an invalid reassessment link.";
                         continue;
                     }
 
+                    $priorRevisionId = $link['prior_revision_id'] ?? null;
+                    if (((int) $link['prior_version_number'] === 1 && $priorRevisionId !== null)
+                        || ((int) $link['prior_version_number'] > 1 && ! $this->isPositiveInteger($priorRevisionId))) {
+                        $errors[] = "Reassessment link {$link['id']} contains an invalid prior revision reference.";
+                        continue;
+                    }
+
                     $targetId = (string) $link['reassessment_attestation_id'];
+                    if ($targetId === (string) $attestationId) {
+                        $errors[] = "Attestation {$attestationId} cannot reassess itself.";
+                        continue;
+                    }
                     $target = $attestationMap[$targetId] ?? null;
                     $reverse = is_array($target) ? ($target['reassessment_of'] ?? null) : null;
 
@@ -302,7 +365,26 @@ final class ProvenanceManifestVerifier
 
                 $reverse = $attestation['reassessment_of'] ?? null;
                 if (is_array($reverse)) {
-                    $sourceId = (string) ($reverse['prior_attestation_id'] ?? '');
+                    if (! $this->isPositiveInteger($reverse['id'] ?? null)
+                        || ! $this->isPositiveInteger($reverse['prior_attestation_id'] ?? null)
+                        || ! $this->isPositiveInteger($reverse['prior_version_number'] ?? null)
+                        || ! in_array($reverse['prior_status'] ?? null, ['active', 'revoked'], true)) {
+                        $errors[] = "Attestation {$attestationId} contains an invalid reverse reassessment link.";
+                        continue;
+                    }
+
+                    $priorRevisionId = $reverse['prior_revision_id'] ?? null;
+                    if (((int) $reverse['prior_version_number'] === 1 && $priorRevisionId !== null)
+                        || ((int) $reverse['prior_version_number'] > 1 && ! $this->isPositiveInteger($priorRevisionId))) {
+                        $errors[] = "Attestation {$attestationId} contains an invalid reverse prior revision reference.";
+                        continue;
+                    }
+
+                    $sourceId = (string) $reverse['prior_attestation_id'];
+                    if ($sourceId === (string) $attestationId) {
+                        $errors[] = "Attestation {$attestationId} cannot reassess itself.";
+                        continue;
+                    }
                     $source = $attestationMap[$sourceId] ?? null;
                     if (! is_array($source)) {
                         $errors[] = "Attestation {$attestationId} references a prior attestation that is absent from this evidence export.";
@@ -331,7 +413,9 @@ final class ProvenanceManifestVerifier
                 || ! is_string($event['type'] ?? null)
                 || trim($event['type']) === ''
                 || ! is_string($event['actor_type'] ?? null)
-                || ! is_string($event['recorded_at'] ?? null)) {
+                || trim($event['actor_type']) === ''
+                || ! is_string($event['recorded_at'] ?? null)
+                || trim($event['recorded_at']) === '') {
                 $errors[] = "The event at index {$eventIndex} is missing required provenance fields.";
                 continue;
             }
@@ -347,15 +431,26 @@ final class ProvenanceManifestVerifier
         if (! is_array($messages) || ! array_is_list($messages)) {
             $errors[] = 'The dispute must contain a messages array.';
         } else {
+            $messageIds = [];
             foreach ($messages as $messageIndex => $message) {
                 if (! is_array($message)
                     || ! $this->isPositiveInteger($message['id'] ?? null)
                     || ! is_string($message['type'] ?? null)
+                    || trim($message['type']) === ''
                     || ! is_string($message['body'] ?? null)
                     || ! is_string($message['actor_type'] ?? null)
-                    || ! is_string($message['recorded_at'] ?? null)) {
+                    || trim($message['actor_type']) === ''
+                    || ! is_string($message['recorded_at'] ?? null)
+                    || trim($message['recorded_at']) === '') {
                     $errors[] = "The dispute message at index {$messageIndex} is missing required provenance fields.";
+                    continue;
                 }
+
+                $messageId = (string) $message['id'];
+                if (isset($messageIds[$messageId])) {
+                    $errors[] = "Dispute message id {$messageId} appears more than once.";
+                }
+                $messageIds[$messageId] = true;
             }
         }
 
@@ -364,12 +459,28 @@ final class ProvenanceManifestVerifier
 
     private function validatePriorVersion(string $attestationId, array $attestation, array $link, array &$errors): void
     {
-        $version = (int) ($link['prior_version_number'] ?? 0);
+        $versionValue = $link['prior_version_number'] ?? null;
         $revisionId = $link['prior_revision_id'] ?? null;
 
-        if ($version === 1 && $revisionId === null) {
+        if (! $this->isPositiveInteger($versionValue)) {
+            $errors[] = "Reassessment link {$link['id']} has an invalid prior version number.";
+            return;
+        }
+
+        $version = (int) $versionValue;
+
+        if ($version === 1) {
+            if ($revisionId !== null) {
+                $errors[] = "Reassessment link {$link['id']} has a revision reference for original version 1.";
+                return;
+            }
             $expectedStatus = 'active';
         } else {
+            if (! $this->isPositiveInteger($revisionId)) {
+                $errors[] = "Reassessment link {$link['id']} has an invalid prior revision id.";
+                return;
+            }
+
             $revisionByVersion = $attestation['_verified_revision_by_version'] ?? [];
             $revision = $revisionByVersion[$version] ?? null;
 
