@@ -63,7 +63,8 @@ The existing user/merchant cross-account identity limitation remains. This miles
 - Original attestation and every revision are immutable.
 - Revision version numbers are sequential per original attestation.
 - Revisions form a single predecessor chain and all versions retain the exact source evidence SHA-256.
-- Corrections require the original issuer, current M9 credential checks, a no-conflict declaration and valid private evidence integrity.
-- Withdrawal is available to the original issuer as a protective action even when the evidence is unavailable or the mandate has ended.
+- Corrections require the original issuer, an active institution and membership, current M9 credential checks, a no-conflict declaration and valid private evidence integrity.
+- Correction eligibility is serialized with institutional governance writes by locking institution, membership, attestation and mandate records in that order before creating the next revision.
+- Withdrawal is available to the original issuer as a protective action even when institution/membership eligibility has changed, the evidence is unavailable or the mandate has ended or been revoked. It does not depend on active institution or membership status.
 - Withdrawal is terminal.
 - No revision operation changes exchange, dispute, payment, wallet, refund or settlement state.
