@@ -16,6 +16,8 @@ Request fields:
 
 Only the original attestation's verifier user and exact membership can issue the correction. The institution and membership must remain active; the original mandate must be active and current or completed, not revoked. The latest institution registration and exact-scope verifier credentials must be verified and current. The latest conflict declaration must be a no-conflict declaration. The source evidence object must pass the existing SHA-256 integrity check.
 
+Correction eligibility is checked while holding row locks in institution → membership → attestation → mandate order. This serializes a correction against concurrent institution or membership suspension/revocation, mandate status changes and new credential/conflict records; a correction cannot rely on a stale pre-lock eligibility read.
+
 The verification scope remains the original mandate's scope. A correction creates the next immutable revision version; it does not update the source attestation.
 
 ## Withdraw an issued attestation
