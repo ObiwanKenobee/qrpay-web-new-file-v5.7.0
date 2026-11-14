@@ -31,7 +31,7 @@ Request fields:
 
 Only the original verifier user and recorded membership can withdraw the attestation. The original account must remain active and verified.
 
-Withdrawal deliberately remains possible after a mandate is completed, expires or is revoked, and after a conflict or credential issue is discovered. It does not require the evidence file to be readable or to pass integrity checks; this preserves a safe way to withdraw a questionable statement when evidence storage has failed.
+Withdrawal deliberately remains possible after a mandate is completed, expires or is revoked, after a conflict or credential issue is discovered, and after institution or membership eligibility has been suspended. It does not require the evidence file to be readable or to pass integrity checks; this preserves a safe way to withdraw a questionable statement when governance eligibility or evidence storage has failed. Withdrawal still requires the authenticated original issuer account to remain active and verified.
 
 Withdrawal creates an immutable revision that preserves the last effective assessment and records the reason. It is terminal: the attestation cannot be corrected or reactivated afterward. A new attestation, if appropriate, requires a new mandate and a separate issuance process.
 
