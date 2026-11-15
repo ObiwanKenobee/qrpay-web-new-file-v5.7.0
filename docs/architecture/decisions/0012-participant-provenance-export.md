@@ -29,8 +29,9 @@ The manifest includes format, schema version, generation timestamp, hash algorit
 - The existing authenticated API user and merchant route groups are used; the authenticated guard determines the participant identity.
 - The service first scopes the exchange to the buyer or merchant account, then resolves its dispute and evidence.
 - An unrelated account receives the existing not-found behavior; unauthenticated requests remain unauthorized.
-- The export does not return buyer/merchant database IDs, internal actor IDs, raw event payloads, private storage disk/path, uploaded file bytes or payment references.
+- The export does not return buyer/merchant database IDs, internal actor IDs, raw event payloads, private storage disk/path, uploaded file bytes or dedicated structured payment-reference fields.
 - Event and message actor IDs are converted to broad actor types such as `authenticated_user`, `merchant_account`, `platform_administrator` or `system`.
+- Exchange terms, participant message bodies, resolution summaries, evidence captions and original file names are retained as recorded. They may themselves contain payment references, contact details or other sensitive information; the export does not rewrite participant statements. Consumers must treat the manifest as private dispute data and review it before sharing.
 - Original uploaded evidence remains accessible only through existing participant-scoped routes that verify the stored SHA-256 before streaming.
 
 ## Consequences
@@ -46,6 +47,6 @@ The manifest includes format, schema version, generation timestamp, hash algorit
 
 - The digest detects changes to the exported snapshot; it is not a digital signature, proof of authorship, external timestamp, legal certification or proof that the underlying claims are true.
 - The manifest covers the records visible at generation time. Later events produce a new snapshot and digest; prior exports are not revoked.
-- The export does not include private file bytes, provider payment credentials, payment references, wallet ledgers or settlement evidence.
+- The export does not include private file bytes, provider payment credentials, dedicated payment-reference fields, wallet ledgers or settlement evidence. This does not prevent a participant from having typed a payment reference or other sensitive detail into a free-text field that is included in the export.
 - It does not create a new adjudication authority or change the status of an exchange or dispute.
 - Canonical hashing depends on preserving JSON object key order and using the documented serialization flags when verifying the digest.
