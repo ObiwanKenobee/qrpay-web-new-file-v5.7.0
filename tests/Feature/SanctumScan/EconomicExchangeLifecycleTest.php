@@ -303,7 +303,9 @@ class EconomicExchangeLifecycleTest extends TestCase
             'dispatch_declared',
             'receipt_confirmed',
             'payment_reference_submitted',
+            'settlement_status_changed',
         ], $eventTypes);
+        $this->assertSame('payment_evidence_submitted', $exchange->settlement_status);
 
         $paymentEvent = SanctumScanExchangeEvent::query()
             ->where('exchange_id', $exchangeId)
