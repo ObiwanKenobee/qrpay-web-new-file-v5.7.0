@@ -51,7 +51,7 @@ The verifier checks schema, digest, source-evidence binding, review completeness
 ## M014 — Provenance verifier consistency hardening
 
 **ADR:** 0014  
-**Status:** Implemented on the dependent provenance branch; integration pending.
+**Status:** Reconstructed on `sanctum-scan/provenance-mainline-reconstruction-012-014-v2`; under draft review in PR #20. Executable validation remains pending.
 
 The offline verifier rejects malformed or incomplete platform-review digests, inconsistent current attestation projections, malformed revision references, invalid reverse reassessment references, and invalid or duplicate event identifiers. It remains an offline consistency verifier—not a digital-signature or factual-truth oracle.
 
