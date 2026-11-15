@@ -34,9 +34,15 @@ class BasicSettings extends Model
         'merchant_sms_notification'     => 'boolean',
         'user_pin_verification'         => 'boolean',
         'agent_pin_verification'        => 'boolean',
+<<<<<<< HEAD
         'merchant_pin_verification'     => 'boolean',
         'sanctum_exchange_identity_gate' => 'boolean',
         'storage_config' => 'object',
+=======
+        'merchant_pin_verification'              => 'boolean',
+        'sanctum_exchange_identity_gate'          => 'boolean',
+        'storage_config'                          => 'object',
+>>>>>>> 6703824 (	new file:   app/Http/Controllers/Admin/SanctumScanUserIdentityController.php)
     ];
 
 

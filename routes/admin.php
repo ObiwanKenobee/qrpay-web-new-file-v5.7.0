@@ -163,6 +163,16 @@ Route::name('admin.')->group(function () {
             ->whereNumber('appealId')
             ->name('sanctum.verifier-appeals.decision');
 
+        // M012 — User identity verification checks.
+        Route::controller(\App\Http\Controllers\Admin\SanctumScanUserIdentityController::class)
+            ->prefix('sanctum/users/{userId}/identity-checks')
+            ->whereNumber('userId')
+            ->name('sanctum.identity-checks.')
+            ->group(function () {
+                Route::get('/', 'index')->name('index');
+                Route::post('/', 'store')->name('store');
+            });
+
         // Dashboard Section
         Route::controller(DashboardController::class)->group(function () {
             Route::get('dashboard', 'index')->name('dashboard');

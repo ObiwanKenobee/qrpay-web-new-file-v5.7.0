@@ -132,6 +132,9 @@
                     @if (!empty($details['harvest_date']))
                         <div class="detail"><span class="detail-label">Harvest date</span><span class="detail-value">{{ $details['harvest_date'] }}</span></div>
                     @endif
+                    @if (!empty($details['quantity']) && !empty($details['unit']))
+                        <div class="detail"><span class="detail-label">Declared quantity</span><span class="detail-value">{{ $details['quantity'] }} {{ $details['unit'] }}</span></div>
+                    @endif
                 </div>
             @endif
 
