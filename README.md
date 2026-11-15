@@ -1281,7 +1281,8 @@ See [ADR 0011](docs/architecture/decisions/0011-independent-attestation-reassess
 - Buyer and merchant participants can retrieve a read-only JSON provenance manifest for their exchange dispute.
 - The export combines the exchange and dispute snapshots, participant dispute messages, evidence metadata and SHA-256 digests, platform review, independent attestations, revision/reassessment/appeal history, and a filtered exchange event timeline.
 - A manifest records the schema version, generation time, hash algorithm and SHA-256 digest of the `data` object. The generation timestamp is deliberately outside the hashed content.
-- Actor account IDs, private file storage keys, raw event payloads and payment references are excluded. Uploaded evidence bytes remain available only through existing participant-scoped, integrity-checked download routes.
+- Actor database IDs, private file storage keys, raw event payloads and dedicated payment-reference fields are excluded. Uploaded evidence bytes remain available only through existing participant-scoped, integrity-checked download routes.
+- Exchange terms, participant messages, resolution summaries, evidence captions and original file names are preserved as recorded. They may themselves contain payment references or other sensitive information; review the export before sharing it beyond the exchange participants.
 - Both participants receive the same underlying data snapshot and content digest. Access remains scoped to the authenticated exchange participant.
 - Exporting a manifest does not alter exchange, dispute, payment, wallet, refund or settlement state.
 
