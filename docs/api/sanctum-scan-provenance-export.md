@@ -30,7 +30,9 @@ The response contains:
 - `data.evidence`: the existing participant evidence representation, including file metadata and digest, platform review, institutional attestations, revisions, appeals and linked reassessments.
 - `data.events`: a filtered exchange timeline.
 
-The export intentionally omits raw event payloads, payment references, buyer/merchant database IDs, internal actor IDs, private storage disk/path and uploaded file bytes. The original files remain available through the existing participant-scoped download endpoints, which verify the file digest before streaming.
+The export omits raw event payloads, dedicated payment-reference fields, buyer/merchant database IDs, internal actor IDs, private storage disk/path and uploaded file bytes. The original files remain available through the existing participant-scoped download endpoints, which verify the file digest before streaming.
+
+**Free-text privacy boundary:** The export deliberately preserves participant-authored content. Exchange terms, dispute messages, resolution summaries, evidence captions and original file names are included as recorded. Those fields may themselves contain payment references, contact details or other sensitive information; the exporter does not attempt to redact or rewrite them. Treat the manifest as private dispute data and review it before sharing outside the exchange participants.
 
 ## Example response shape
 
