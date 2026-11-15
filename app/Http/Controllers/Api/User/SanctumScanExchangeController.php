@@ -9,6 +9,7 @@ use App\Models\Merchants\Merchant;
 use App\Models\SanctumScanResource;
 use App\Models\User;
 use App\Services\SanctumScan\ExchangeEventRecorder;
+use App\Services\SanctumScan\ExchangeSettlementManager;
 use App\Services\SanctumScan\UserIdentityCheckManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
