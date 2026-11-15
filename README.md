@@ -1292,6 +1292,15 @@ See [ADR 0011](docs/architecture/decisions/0011-independent-attestation-reassess
 
 See [ADR 0015](docs/architecture/decisions/0015-manual-buyer-identity-review.md), the [buyer identity review API guide](docs/api/sanctum-scan-buyer-identity-review.md), and [the engineering roadmap](docs/architecture/roadmap.md).
 
+**Milestone 016 — Exchange settlement state machine (hardening under PR #18)**
+
+- Adds a separate settlement projection and append-only transition events; it does not move funds.
+- System actors may record payment-evidence submission only. Authenticated administrators record payment review decisions.
+- Payment verification requires a matching immutable evidence amount and currency. Settlement additionally requires a recorded buyer receipt.
+- Rejected evidence resubmission is deferred until a versioned evidence model exists.
+
+See [ADR 0016](docs/architecture/decisions/0016-exchange-settlement-state-machine.md).
+
 **Project:** Atlas Sanctum — Sanctum Scan.
 
 **Initial geographic research context:** Nakuru County, Kenya.
