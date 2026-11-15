@@ -1,6 +1,6 @@
 # Sanctum Scan — Engineering Roadmap
 
-**Last reconciled:** 2026-11-14  
+**Last reconciled:** 2026-11-15  
 **Purpose:** Keep implemented work, branch state, and future scope consistent. This roadmap distinguishes code merged into `main` from code that exists only on a dependent feature branch.
 
 ## Repository state
@@ -33,12 +33,12 @@ The unit of progress is a trustworthy, reviewable capability—not a growing lis
 **ADR:** 0012  
 **Status:** Reconstructed on `sanctum-scan/provenance-mainline-reconstruction-012-014-v2`; under draft review in PR #20.
 
-The buyer and merchant can obtain a participant-scoped JSON provenance manifest for an exchange. The manifest contains the permitted event, evidence, review, attestation, revision, and reassessment history for that participant. Its digest is calculated over the canonical exported data. Private storage paths, raw files, payment credentials, and unrelated participant records are excluded.
+The buyer and merchant can obtain a participant-scoped JSON provenance manifest for an exchange. The manifest contains the permitted event, evidence, review, attestation, revision, and reassessment history for that participant. Its digest is calculated over the canonical exported data. Private storage paths, raw files, provider payment credentials, dedicated payment-reference fields, and unrelated participant records are excluded. Participant-authored terms, messages, resolution summaries, evidence captions and original file names are preserved and may themselves contain sensitive information; consumers must treat the export as private dispute data.
 
 ## M013 — Offline provenance manifest verifier
 
 **ADR:** 0013  
-**Status:** Implemented on the dependent provenance branch; integration pending.
+**Status:** Reconstructed on `sanctum-scan/provenance-mainline-reconstruction-012-014-v2`; under draft review in PR #20. Executable validation remains pending.
 
 A local Artisan command validates an exported manifest without network or database access:
 
