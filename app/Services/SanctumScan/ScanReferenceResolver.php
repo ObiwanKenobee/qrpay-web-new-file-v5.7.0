@@ -132,13 +132,17 @@ class ScanReferenceResolver
 
         if ($record->resource_type === 'agricultural_batch') {
             $document['details'] = array_merge($document['details'], [
-                'variety' => $record->variety,
-                'origin' => $record->origin_label,
+                'variety'      => $record->variety,
+                'origin'       => $record->origin_label,
                 'harvest_date' => $record->occurred_on?->toDateString(),
+                'quantity'     => $record->quantity !== null ? (string) $record->quantity : null,
+                'unit'         => $record->unit,
             ]);
+        } elseif ($record->quantity !== null && $record->unit !== null) {
+            $document['details']['quantity'] = (string) $record->quantity;
+            $document['details']['unit']     = $record->unit;
         }
 
-        // Quantity and unit remain merchant-private in this first public registry.
         return $document;
     }
 }
