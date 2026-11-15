@@ -70,26 +70,35 @@ class ExchangeSettlementManager
                 return 'invalid_settlement_actor';
             }
 
+            $isCancellation = $toStatus === 'cancelled'
+                && $exchange->status === 'cancelled';
+
             $transitionMap = $actorGuard === 'system'
                 ? self::SYSTEM_TRANSITIONS
                 : self::ADMIN_TRANSITIONS;
             $allowed = $transitionMap[$exchange->settlement_status] ?? [];
 
-            if (! in_array($toStatus, $allowed, true)) {
+            if (! $isCancellation && ! in_array($toStatus, $allowed, true)) {
                 return 'invalid_settlement_transition';
             }
 
-            if ($toStatus === 'payment_verified' && $verificationStatus !== 'platform_verified') {
-                return 'payment_verification_decision_required';
+            if ($toStatus === 'payment_verified') {
+                if ($verificationStatus !== 'platform_verified') {
+                    return 'payment_verification_decision_required';
+                }
+
+                $paymentEvidence = $exchange->paymentEvidence;
+                if (! $paymentEvidence
+                    || $paymentEvidence->verification_status !== 'unverified'
+                    || bccomp((string) $paymentEvidence->amount, (string) $exchange->amount, 8) !== 0
+                    || strtoupper($paymentEvidence->currency) !== strtoupper($exchange->currency)) {
+                    return 'payment_evidence_mismatch';
+                }
             }
 
             if ($toStatus === 'settled'
                 && ($exchange->status !== 'received' || $exchange->received_at === null)) {
                 return 'buyer_receipt_required';
-            }
-
-            if ($toStatus === 'cancelled' && $exchange->status !== 'cancelled') {
-                return 'exchange_not_cancelled';
             }
 
             $from = $exchange->settlement_status;
