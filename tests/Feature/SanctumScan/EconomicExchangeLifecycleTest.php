@@ -2503,8 +2503,8 @@ class EconomicExchangeLifecycleTest extends TestCase
         Schema::dropIfExists('sanctum_scan_exchange_dispute_evidence');
         Schema::dropIfExists('sanctum_scan_exchange_dispute_messages');
         Schema::dropIfExists('sanctum_scan_exchange_disputes');
-        Schema::dropIfExists('sanctum_scan_exchanges');
         Schema::dropIfExists('sanctum_scan_exchange_payment_evidence');
+        Schema::dropIfExists('sanctum_scan_exchanges');
         Schema::dropIfExists('sanctum_scan_exchange_events');
         Schema::dropIfExists('sanctum_scan_exchanges');
         Schema::dropIfExists('sanctum_scan_resources');
