@@ -26,7 +26,6 @@ class ExchangeSettlementManager
     // Only an authenticated platform administrator may record review decisions.
     private const ADMIN_TRANSITIONS = [
         'payment_evidence_submitted' => ['payment_verified', 'payment_rejected'],
-        'payment_rejected'           => ['payment_evidence_submitted'],
         'payment_verified'           => ['settled'],
     ];
 
@@ -90,7 +89,7 @@ class ExchangeSettlementManager
                 $paymentEvidence = $exchange->paymentEvidence;
                 if (! $paymentEvidence
                     || $paymentEvidence->verification_status !== 'unverified'
-                    || bccomp((string) $paymentEvidence->amount, (string) $exchange->amount, 8) !== 0
+                    || (string) $paymentEvidence->amount !== (string) $exchange->amount
                     || strtoupper($paymentEvidence->currency) !== strtoupper($exchange->currency)) {
                     return 'payment_evidence_mismatch';
                 }
