@@ -1,0 +1,40 @@
+name: GitHub Actions runner allocation diagnostic
+
+on:
+  push:
+    branches:
+      - 'sanctum-scan/**'
+    paths:
+      - '.github/workflows/runner-allocation-diagnostic.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/runner-allocation-diagnostic.yml'
+
+permissions: {}
+
+jobs:
+  ubuntu-latest-smoke:
+    name: Smoke test ubuntu-latest allocation
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Confirm hosted runner allocation
+        shell: bash
+        run: |
+          echo "runner-allocation-ok"
+          echo "Runner label: ubuntu-latest"
+          uname -a
+
+  ubuntu-24-04-smoke:
+    name: Smoke test ubuntu-24.04 allocation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Confirm hosted runner allocation
+        shell: bash
+        run: |
+          echo "runner-allocation-ok"
+          echo "Runner label: ubuntu-24.04"
+          uname -a
