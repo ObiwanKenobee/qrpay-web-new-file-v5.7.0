@@ -1,0 +1,28 @@
+name: GitHub Actions slim runner allocation diagnostic
+
+on:
+  push:
+    branches:
+      - 'sanctum-scan/**'
+    paths:
+      - '.github/workflows/runner-allocation-slim-diagnostic.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/runner-allocation-slim-diagnostic.yml'
+
+permissions: {}
+
+jobs:
+  ubuntu-slim-smoke:
+    name: Smoke test ubuntu-slim allocation
+    runs-on: ubuntu-slim
+    timeout-minutes: 3
+    steps:
+      - name: Confirm hosted runner allocation
+        shell: bash
+        run: |
+          echo "runner-allocation-ok"
+          echo "Runner label: ubuntu-slim"
+          uname -a
