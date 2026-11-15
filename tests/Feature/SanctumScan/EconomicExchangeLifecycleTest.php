@@ -357,6 +357,17 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->assertSame('payment_evidence_submitted', $exchange->fresh()->settlement_status);
 
         $this->assertSame(
+            'payment_rejection_decision_required',
+            $manager->transition(
+                $exchange->fresh(),
+                'payment_rejected',
+                'admin',
+                $this->makeAdminForVerification('settlement-reject-reviewer'),
+                'platform_verified'
+            )
+        );
+
+        $this->assertSame(
             'invalid_settlement_actor',
             $manager->transition($exchange->fresh(), 'payment_verified', 'admin', 0)
         );
