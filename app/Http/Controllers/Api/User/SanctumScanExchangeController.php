@@ -9,6 +9,7 @@ use App\Models\Merchants\Merchant;
 use App\Models\SanctumScanResource;
 use App\Models\User;
 use App\Services\SanctumScan\ExchangeEventRecorder;
+use App\Services\SanctumScan\ExchangeSettlementManager;
 use App\Services\SanctumScan\UserIdentityCheckManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -242,7 +243,8 @@ class SanctumScanExchangeController extends Controller
     public function submitPaymentReference(
         Request $request,
         int $exchangeId,
-        ExchangeEventRecorder $events
+        ExchangeEventRecorder $events,
+        ExchangeSettlementManager $settlements
     ): JsonResponse {
         $validator = Validator::make($request->all(), [
             'rail' => 'required|in:mpesa,bank_transfer,cash,card,other',
@@ -260,7 +262,7 @@ class SanctumScanExchangeController extends Controller
         $buyer = $request->user('api');
         $validated = $validator->validated();
 
-        $result = DB::transaction(function () use ($buyer, $exchangeId, $validated, $events) {
+        $result = DB::transaction(function () use ($buyer, $exchangeId, $validated, $events, $settlements) {
             $exchange = SanctumScanExchange::query()
                 ->whereKey($exchangeId)
                 ->where('buyer_user_id', $buyer->getKey())
@@ -309,6 +311,8 @@ class SanctumScanExchangeController extends Controller
                     'currency' => $evidence->currency,
                 ]
             );
+
+            $settlements->onPaymentEvidenceSubmitted($exchange);
 
             return $exchange->fresh(['merchant:id,username,business_name', 'paymentEvidence', 'events']);
         });

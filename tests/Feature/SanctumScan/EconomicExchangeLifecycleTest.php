@@ -19,6 +19,7 @@ use App\Models\SanctumScanExchangeEvidenceReview;
 use App\Services\SanctumScan\DisputeEvidenceManager;
 use App\Services\SanctumScan\IndependentVerificationManager;
 use App\Services\SanctumScan\UserIdentityCheckManager;
+use App\Services\SanctumScan\ExchangeSettlementManager;
 use App\Models\SanctumScanIndependentAttestation;
 use App\Models\SanctumScanVerifierRegistryEvent;
 use App\Models\SanctumScanVerifierCredentialReview;
@@ -105,6 +106,8 @@ class EconomicExchangeLifecycleTest extends TestCase
         $eventMigration->up();
         $paymentEvidenceMigration = require base_path('database/migrations/2026_11_13_162000_create_sanctum_scan_exchange_payment_evidence_table.php');
         $paymentEvidenceMigration->up();
+        $settlementMigration = require base_path('database/migrations/2026_11_14_110000_add_settlement_status_to_sanctum_scan_exchanges_table.php');
+        $settlementMigration->up();
         $disputeMigration = require base_path('database/migrations/2026_11_13_163000_create_sanctum_scan_exchange_disputes_table.php');
         $disputeMigration->up();
         $disputeMessageMigration = require base_path('database/migrations/2026_11_13_164000_create_sanctum_scan_exchange_dispute_messages_table.php');
@@ -300,7 +303,9 @@ class EconomicExchangeLifecycleTest extends TestCase
             'dispatch_declared',
             'receipt_confirmed',
             'payment_reference_submitted',
+            'settlement_status_changed',
         ], $eventTypes);
+        $this->assertSame('payment_evidence_submitted', $exchange->settlement_status);
 
         $paymentEvent = SanctumScanExchangeEvent::query()
             ->where('exchange_id', $exchangeId)
@@ -310,6 +315,149 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->assertSame('unverified', $paymentEvent->verification_status);
         $this->assertSame('api', $paymentEvent->recorded_by_guard);
         $this->assertSame($buyer->getKey(), $paymentEvent->recorded_by_id);
+    }
+
+    public function test_settlement_state_machine_requires_bounded_actors_matching_payment_evidence_and_buyer_receipt(): void
+    {
+        $merchant = $this->makeMerchant('settlement-seller', 'Settlement Seller');
+        $buyer = $this->makeBuyer('settlement-buyer');
+        $resource = $this->makeResource($merchant);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+        $exchange = SanctumScanExchange::query()->findOrFail($offer['id']);
+
+        $exchange->forceFill([
+            'status' => 'received',
+            'received_at' => now(),
+        ])->save();
+
+        SanctumScanExchangePaymentEvidence::query()->create([
+            'exchange_id' => $exchange->getKey(),
+            'rail' => 'mpesa',
+            'reference' => 'SETTLEMENT-REF-001',
+            'amount' => $exchange->amount,
+            'currency' => $exchange->currency,
+            'verification_status' => 'unverified',
+            'submitted_by_guard' => 'api',
+            'submitted_by_id' => $buyer->getKey(),
+            'submitted_at' => now(),
+        ]);
+
+        $manager = app(ExchangeSettlementManager::class);
+
+        $this->assertSame(
+            'invalid_settlement_actor',
+            $manager->transition($exchange, 'settled', 'system', 0)
+        );
+        $this->assertSame(
+            'invalid_settlement_actor',
+            $manager->transition($exchange, 'payment_verified', 'merchant_api', $merchant->getKey())
+        );
+
+        $manager->onPaymentEvidenceSubmitted($exchange->fresh());
+        $this->assertSame('payment_evidence_submitted', $exchange->fresh()->settlement_status);
+
+        $this->assertSame(
+            'payment_rejection_decision_required',
+            $manager->transition(
+                $exchange->fresh(),
+                'payment_rejected',
+                'admin',
+                $this->makeAdminForVerification('settlement-reject-reviewer'),
+                'platform_verified'
+            )
+        );
+
+        $this->assertSame(
+            'invalid_settlement_actor',
+            $manager->transition($exchange->fresh(), 'payment_verified', 'admin', 0)
+        );
+
+        $verified = $manager->transition(
+            $exchange->fresh(),
+            'payment_verified',
+            'admin',
+            $this->makeAdminForVerification('settlement-reviewer'),
+            'platform_verified'
+        );
+
+        $this->assertInstanceOf(SanctumScanExchange::class, $verified);
+        $this->assertSame('payment_verified', $verified->settlement_status);
+
+        $settled = $manager->transition(
+            $verified,
+            'settled',
+            'admin',
+            $this->makeAdminForVerification('settlement-closer')
+        );
+
+        $this->assertInstanceOf(SanctumScanExchange::class, $settled);
+        $this->assertSame('settled', $settled->settlement_status);
+        $this->assertSame(3, SanctumScanExchangeEvent::query()
+            ->where('exchange_id', $exchange->getKey())
+            ->where('event_type', 'settlement_status_changed')
+            ->count());
+    }
+
+    public function test_settlement_rejects_mismatched_payment_evidence_and_missing_buyer_receipt(): void
+    {
+        $merchant = $this->makeMerchant('settlement-guard-seller', 'Settlement Guard Seller');
+        $buyer = $this->makeBuyer('settlement-guard-buyer');
+        $resource = $this->makeResource($merchant);
+        $offer = $this->issueOffer($merchant, $buyer, $resource);
+        $exchange = SanctumScanExchange::query()->findOrFail($offer['id']);
+
+        SanctumScanExchangePaymentEvidence::query()->create([
+            'exchange_id' => $exchange->getKey(),
+            'rail' => 'mpesa',
+            'reference' => 'SETTLEMENT-REF-002',
+            'amount' => '1.00000000',
+            'currency' => $exchange->currency,
+            'verification_status' => 'unverified',
+            'submitted_by_guard' => 'api',
+            'submitted_by_id' => $buyer->getKey(),
+            'submitted_at' => now(),
+        ]);
+
+        $manager = app(ExchangeSettlementManager::class);
+        $manager->onPaymentEvidenceSubmitted($exchange);
+
+        $this->assertSame(
+            'payment_evidence_mismatch',
+            $manager->transition(
+                $exchange->fresh(),
+                'payment_verified',
+                'admin',
+                $this->makeAdminForVerification('settlement-mismatch-reviewer'),
+                'platform_verified'
+            )
+        );
+
+        $exchange->forceFill(['status' => 'received', 'received_at' => now()])->save();
+        SanctumScanExchangePaymentEvidence::query()
+            ->where('exchange_id', $exchange->getKey())
+            ->update(['amount' => $exchange->amount]);
+
+        $verified = $manager->transition(
+            $exchange->fresh(),
+            'payment_verified',
+            'admin',
+            $this->makeAdminForVerification('settlement-receipt-reviewer'),
+            'platform_verified'
+        );
+
+        $this->assertInstanceOf(SanctumScanExchange::class, $verified);
+        $exchange->forceFill(['status' => 'dispatched', 'received_at' => null])->save();
+
+        $this->assertSame(
+            'buyer_receipt_required',
+            $manager->transition(
+                $verified,
+                'settled',
+                'admin',
+                $this->makeAdminForVerification('settlement-receipt-closer')
+            )
+        );
+        $this->assertSame('payment_verified', $exchange->fresh()->settlement_status);
     }
 
     public function test_merchant_cannot_issue_an_offer_for_another_merchants_resource(): void
@@ -2369,6 +2517,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         Schema::dropIfExists('sanctum_scan_exchange_dispute_messages');
         Schema::dropIfExists('sanctum_scan_exchange_disputes');
         Schema::dropIfExists('sanctum_scan_exchange_payment_evidence');
+        Schema::dropIfExists('sanctum_scan_exchanges');
         Schema::dropIfExists('sanctum_scan_exchange_events');
         Schema::dropIfExists('sanctum_scan_exchanges');
         Schema::dropIfExists('sanctum_scan_resources');

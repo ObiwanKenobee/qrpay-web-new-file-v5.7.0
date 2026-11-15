@@ -1281,7 +1281,7 @@ See [ADR 0011](docs/architecture/decisions/0011-independent-attestation-reassess
 - Participant-scoped provenance export, the offline manifest verifier and verifier consistency hardening have been implemented on the dependent branch `sanctum-scan/provenance-verifier-hardening-014`.
 - Those changes are not yet integrated into `main`; the branch has diverged and is under draft integration review in [PR #17](https://github.com/ObiwanKenobee/qrpay-web-new-file-v5.7.0/pull/17). It remains unmerged. See [the engineering roadmap](docs/architecture/roadmap.md) for the exact branch state.
 
-**Milestone 015 — Manual buyer identity review and optional acceptance gate (PR #16)**
+**Milestone 015 — Manual buyer identity review and optional acceptance gate (merged into main via PR #16)**
 
 - An append-only administrator review ledger records the method, internal case reference, decision, summary, reviewer and timestamps. A later non-verified result clears the current verified projection without rewriting earlier reviews.
 - The optional gate is disabled by default and is checked only inside the buyer's acceptance transaction. An unverified buyer receives a buyer-only `403 buyer_identity_unverified`; the offer remains `offered`.
@@ -1291,6 +1291,15 @@ See [ADR 0011](docs/architecture/decisions/0011-independent-attestation-reassess
 - Existing payment, wallet and settlement behavior is unchanged.
 
 See [ADR 0015](docs/architecture/decisions/0015-manual-buyer-identity-review.md), the [buyer identity review API guide](docs/api/sanctum-scan-buyer-identity-review.md), and [the engineering roadmap](docs/architecture/roadmap.md).
+
+**Milestone 016 — Exchange settlement state machine (hardening under PR #19)**
+
+- Adds a separate settlement projection and append-only transition events; it does not move funds.
+- System actors may record payment-evidence submission only. Authenticated administrators record payment review decisions.
+- Payment verification requires a matching immutable evidence amount and currency. Settlement additionally requires a recorded buyer receipt.
+- Rejected evidence resubmission is deferred until a versioned evidence model exists.
+
+See [ADR 0016](docs/architecture/decisions/0016-exchange-settlement-state-machine.md).
 
 **Project:** Atlas Sanctum — Sanctum Scan.
 

@@ -58,7 +58,7 @@ The offline verifier rejects malformed or incomplete platform-review digests, in
 ## M015 — Manual buyer identity review and optional acceptance gate
 
 **ADR:** 0015  
-**Status:** In progress — PR #16.
+**Status:** Merged into main via PR #16.
 
 ### Objective
 
@@ -84,7 +84,13 @@ Introduce a narrow, auditable manual review process before a buyer accepts an ex
 
 ## M016 — Payment settlement state machine
 
-Introduce a separate exchange settlement status and append-only transition events. Payment evidence remains unverified until an authorised review process records a decision. A `payment_verified` state is a recorded review result; it must not move money. A settled state may only be recorded when payment verification and buyer receipt conditions have both been satisfied.
+**Status:** Existing foundation on `main`; transition and actor hardening in progress on PR #19.
+
+The separate settlement projection and immutable exchange timeline events exist on `main`. PR #18 narrows system transitions to evidence submission, reserves review decisions for authenticated administrators, checks payment evidence amount/currency against the exchange, and requires recorded buyer receipt before `settled`. It adds regression tests for actor boundaries, mismatched evidence and receipt prerequisites.
+
+This remains an internal decision record. It does not prove external bank settlement and does not move money. The current immutable evidence record does not yet support replacement after rejection; resubmission is intentionally deferred until a versioned evidence model exists.
+
+See [ADR 0016](docs/architecture/decisions/0016-exchange-settlement-state-machine.md).
 
 **Non-goals:** no wallet debit/credit, no automatic M-Pesa or card settlement, and no external payment-rail integration in this milestone.
 
