@@ -10,9 +10,9 @@
 | 002–009 | Scan references, resource registry, exchange/dispute lifecycle, private evidence, verifier institutions and governance | Implemented | On `main` |
 | 010 | Versioned attestation corrections and protective withdrawal | Implemented | On `main` |
 | 011 | Independent attestation reassessment | Implemented | On `main` |
-| 012 | Participant-scoped provenance export | Reconstructed on `sanctum-scan/provenance-mainline-reconstruction-012-014-v2` | Draft integration review pending |
-| 013 | Offline provenance manifest verifier | Reconstructed on `sanctum-scan/provenance-mainline-reconstruction-012-014-v2` | Draft integration review pending |
-| 014 | Provenance verifier consistency hardening | Reconstructed on `sanctum-scan/provenance-mainline-reconstruction-012-014-v2` | Draft integration review pending |
+| 012 | Participant-scoped provenance export | Reconstructed on `sanctum-scan/provenance-mainline-reconstruction-012-014-v2` | Draft review in PR #20 |
+| 013 | Offline provenance manifest verifier | Reconstructed on `sanctum-scan/provenance-mainline-reconstruction-012-014-v2` | Draft review in PR #20 |
+| 014 | Provenance verifier consistency hardening | Reconstructed on `sanctum-scan/provenance-mainline-reconstruction-012-014-v2` | Draft review in PR #20 |
 | 015 | Manual buyer identity review and optional acceptance gate | Merged via PR #16 | On `main` |
 | 016 | Payment settlement state machine (no movement of funds) | Merged via PR #19 | On `main` |
 | 017 | Wallet settlement integration | Deferred until M016 and financial controls are validated | Not started |
@@ -22,7 +22,7 @@
 | 021 | Public, anonymised economic intelligence snapshots | Planned | Not started |
 | 022 | Developer SDK and open protocol package | Planned | Not started |
 
-**Important branch distinction:** M015 and M016 are merged into `main` via PRs #16 and #19. The older cumulative M012–M014 stack remains unmerged in stale PR #17; it is being reconstructed on `sanctum-scan/provenance-mainline-reconstruction-012-014-v2` against the current mainline. Do not merge or retarget PR #17 as-is.
+**Important branch distinction:** M015 and M016 are merged into `main` via PRs #16 and #19. The older cumulative M012–M014 stack remains unmerged in stale PR #17; its mainline-based reconstruction is under draft review in [PR #20](https://github.com/ObiwanKenobee/qrpay-web-new-file-v5.7.0/pull/20). Do not merge or retarget PR #17 as-is.
 
 ## Current engineering principle
 
@@ -31,7 +31,7 @@ The unit of progress is a trustworthy, reviewable capability—not a growing lis
 ## M012 — Participant-scoped provenance export
 
 **ADR:** 0012  
-**Status:** Reconstructed on `sanctum-scan/provenance-mainline-reconstruction-012-014-v2`; integration review pending.
+**Status:** Reconstructed on `sanctum-scan/provenance-mainline-reconstruction-012-014-v2`; under draft review in PR #20.
 
 The buyer and merchant can obtain a participant-scoped JSON provenance manifest for an exchange. The manifest contains the permitted event, evidence, review, attestation, revision, and reassessment history for that participant. Its digest is calculated over the canonical exported data. Private storage paths, raw files, payment credentials, and unrelated participant records are excluded.
 
