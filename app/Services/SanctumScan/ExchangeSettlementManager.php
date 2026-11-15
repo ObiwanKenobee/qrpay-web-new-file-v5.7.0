@@ -81,6 +81,10 @@ class ExchangeSettlementManager
                 return 'invalid_settlement_transition';
             }
 
+            if ($toStatus === 'payment_rejected' && $verificationStatus !== 'platform_rejected') {
+                return 'payment_rejection_decision_required';
+            }
+
             if ($toStatus === 'payment_verified') {
                 if ($verificationStatus !== 'platform_verified') {
                     return 'payment_verification_decision_required';
