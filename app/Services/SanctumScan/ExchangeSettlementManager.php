@@ -17,12 +17,17 @@ class ExchangeSettlementManager
         'cancelled',
     ];
 
-    // Transitions an admin may drive manually.
-    // Key = current status, value = allowed next statuses.
+    // System transitions are deliberately narrow: recording submitted evidence
+    // is not payment verification and never settles an exchange.
+    private const SYSTEM_TRANSITIONS = [
+        'awaiting_payment' => ['payment_evidence_submitted'],
+    ];
+
+    // Only an authenticated platform administrator may record review decisions.
     private const ADMIN_TRANSITIONS = [
         'payment_evidence_submitted' => ['payment_verified', 'payment_rejected'],
+        'payment_rejected'           => ['payment_evidence_submitted'],
         'payment_verified'           => ['settled'],
-        'payment_rejected'           => ['payment_evidence_submitted'], // allow resubmission path
     ];
 
     public function __construct(private readonly ExchangeEventRecorder $events) {}
@@ -56,10 +61,35 @@ class ExchangeSettlementManager
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $allowed = self::ADMIN_TRANSITIONS[$exchange->settlement_status] ?? [];
+            if (! in_array($actorGuard, ['admin', 'system'], true)) {
+                return 'invalid_settlement_actor';
+            }
 
-            if (! in_array($toStatus, $allowed, true) && $actorGuard !== 'system') {
+            if (($actorGuard === 'system' && $actorId !== 0)
+                || ($actorGuard === 'admin' && $actorId < 1)) {
+                return 'invalid_settlement_actor';
+            }
+
+            $transitionMap = $actorGuard === 'system'
+                ? self::SYSTEM_TRANSITIONS
+                : self::ADMIN_TRANSITIONS;
+            $allowed = $transitionMap[$exchange->settlement_status] ?? [];
+
+            if (! in_array($toStatus, $allowed, true)) {
                 return 'invalid_settlement_transition';
+            }
+
+            if ($toStatus === 'payment_verified' && $verificationStatus !== 'platform_verified') {
+                return 'payment_verification_decision_required';
+            }
+
+            if ($toStatus === 'settled'
+                && ($exchange->status !== 'received' || $exchange->received_at === null)) {
+                return 'buyer_receipt_required';
+            }
+
+            if ($toStatus === 'cancelled' && $exchange->status !== 'cancelled') {
+                return 'exchange_not_cancelled';
             }
 
             $from = $exchange->settlement_status;
