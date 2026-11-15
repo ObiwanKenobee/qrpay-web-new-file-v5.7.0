@@ -1313,7 +1313,7 @@ See [ADR 0013](docs/architecture/decisions/0013-offline-provenance-verification.
 
 See [ADR 0014](docs/architecture/decisions/0014-provenance-verifier-consistency-hardening.md) and the [offline verifier guide](docs/api/sanctum-scan-offline-provenance-verifier.md).
 
-**Integration status:** Reconstructed on `sanctum-scan/provenance-mainline-reconstruction-012-014-v2` from current `main`, retaining the merged M015 and M016 changes. Review and executable validation are pending.
+**Integration status:** Under draft review in [PR #20](https://github.com/ObiwanKenobee/qrpay-web-new-file-v5.7.0/pull/20), reconstructed from current `main` while retaining the merged M015 and M016 changes. Executable validation remains pending.
 
 **Milestone 015 — Manual buyer identity review and optional acceptance gate (merged into main via PR #16)**
 
