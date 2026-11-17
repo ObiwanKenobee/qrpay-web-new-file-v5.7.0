@@ -1,10 +1,10 @@
 # Roadmap Status — QRPay / Sanctum Scan
 
-**Date:** 2026-11-16
+**Date:** 2026-11-17
 **Branch:** `feature/qrpay-update`
 **Method:** roadmap phases from [`README.md`](../README.md#13-development-roadmap) mapped to repository evidence per ADR 0017. A capability is only **Verified** when an executed test or command proves it; roadmap checkboxes are not evidence.
 
-**Current executed baseline:** `composer check` → 94 tests, 1,017 assertions, 1 skipped (MySQL-only concurrency test), green on SQLite; G1, G2, G7, G8 green. Pint passes on all 30 changed PHP files. The GitHub workflow and its MySQL job are wired but not yet executed.
+**Current executed baseline:** `composer check` → 96 tests, 1,049 assertions, 1 skipped (MySQL-only concurrency test), green on SQLite; G1, G2, G7, G8 green. Pint passes on all 32 changed PHP files. The MySQL job's full step sequence is green locally on MySQL 9.4 (migrations, route:list 1,347 routes, backfill down/up, concurrency test); only the GitHub runner run is pending.
 
 Status vocabulary (ADR 0017): **Planned** · **In progress** · **Implemented** · **Verified** · **Retired**.
 

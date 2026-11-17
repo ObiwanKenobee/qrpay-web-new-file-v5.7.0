@@ -5,7 +5,7 @@
 **Branch examined:** `feature/qrpay-update` at `4ddb392` (18 commits ahead of `main`, 0 behind)  
 **Scope:** Read-only investigation. No functional code was changed.
 
-> **Update 2026-11-16 (QODOR-002, M017–M019):** the boot blocker is repaired. `php artisan --version` reports 12.72.0 and `composer check` reports 94 tests, 1,017 assertions, 1 skipped (the MySQL-only concurrency test). The M016 settlement slice is implemented and covered by the matrices and suites listed in §9.6; the ADR 0016 gates and their CI workflow are wired; the admin operator middleware stack is verified by `AdminOperatorMiddlewareTest`; payment evidence is append-only and versioned, so rejection can be reopened by a buyer's new evidence (ADR 0018). Statements below marked as baseline findings remain historical evidence from the examined revision.
+> **Update 2026-11-17 (QODOR-002, M017–M019):** the boot blocker is repaired. `php artisan --version` reports 12.72.0 and `composer check` reports 96 tests, 1,049 assertions, 1 skipped (the MySQL-only concurrency test). The MySQL job's step sequence (`migrate:fresh`, route-introspection fixture, `route:list --json`, backfill down/up, concurrency test) was executed green locally against MySQL 9.4; only the GitHub runner run is pending. The M016 settlement slice is implemented and covered by the matrices and suites listed in §9.6; the ADR 0016 gates and their CI workflow are wired; the admin operator middleware stack is verified by `AdminOperatorMiddlewareTest`; payment evidence is append-only and versioned, so rejection can be reopened by a buyer's new evidence (ADR 0018). Statements below marked as baseline findings remain historical evidence from the examined revision.
 
 ## Evidence conventions
 
@@ -90,7 +90,7 @@ Gateway constants are defined in [`app/Constants/PaymentGatewayConst.php`](app/C
 | Tests | PHPUnit | locked `11.5.57`; local vendor `11.5.58` |
 | Code style | Laravel Pint | locked `1.30.4`; CI gate on changed files |
 | Frontend | Vite 3, Bootstrap 5, Sass, Axios | `package.json`; no lockfile present, no build gate |
-| Database | MySQL (production template) | `DB_CONNECTION=mysql` in `.env.example`; MySQL CI job wired (unexecuted) |
+| Database | MySQL (production template) | `DB_CONNECTION=mysql` in `.env.example`; MySQL CI job wired and its step sequence green locally on MySQL 9.4 (GitHub run pending) |
 | Test database | SQLite in-memory | tests override config and build schemas manually |
 | Cache/session/queue | File / file / database | `.env.example`; scheduler runs queue worker every five minutes |
 | Broadcasting | Pusher | `BROADCAST_DRIVER=pusher` |
@@ -310,7 +310,7 @@ There are no database `CHECK` constraints for status columns. State validity is 
 
 - Production template: MySQL, file cache/session, database queue.
 - CI/tests: SQLite in-memory for the gate job; MySQL 8 service for the migration and concurrency job.
-- The MySQL job is wired but unexecuted; until it runs, MySQL migration compatibility is unverified.
+- The MySQL job's full step sequence was executed locally against a disposable MySQL 9.4 instance on 2026-11-17 and is green; execution on the GitHub runner is still pending (R-02).
 
 ---
 
@@ -419,7 +419,7 @@ Architecture-level failure points, in priority order:
 6. **Installer reset endpoint** remains reachable post-install and rewrites the environment ([`resources/installer/src/routes/web.php:38`](resources/installer/src/routes/web.php:38)).
 7. **Legacy wallet concurrency and nested transactions** (double-spend/partial settlement hypotheses; see risk register).
 8. **Per-request settings queries and null dereferences** (`SystemMaintenance` assumes a row exists; [`app/Http/Middleware/Admin/SystemMaintenance.php:21`](app/Http/Middleware/Admin/SystemMaintenance.php:21)).
-9. **Test/production divergence** (SQLite hand-built schemas, middleware bypass, MySQL job unexecuted).
+9. **Test/production divergence** (SQLite hand-built schemas, middleware bypass; the MySQL job now runs green locally and its GitHub execution is the remaining check).
 10. **CI gates are wired but have not executed on GitHub**, and branch protection is not confirmed.
 
 ---
@@ -490,13 +490,13 @@ This fits the existing architecture because it adds no runtime service and no ne
 
 ### Verified
 
-- At the QODOR-001 revision, HEAD could not boot due to committed conflict markers; that blocker is repaired and the suite now runs (94 tests, 1,017 assertions, 1 MySQL-only skip).
+- At the QODOR-001 revision, HEAD could not boot due to committed conflict markers; that blocker is repaired and the suite now runs (96 tests, 1,049 assertions, 1 MySQL-only skip). The MySQL-gated concurrency test itself passes when run against MySQL 9.4.
 - The original CI ran one test file on limited triggers. Since 2026-11-16 the workflow runs on every push/PR, executes the full suite, and wires the ADR 0016 gates; GitHub execution is pending.
 - Sanctum Scan has no wallet/transaction coupling.
 - Settlement code was orphaned and untested at the examined revision; it is now wired, and the full suite is green.
 - Settlement transitions are exhaustively matrix-tested (144 combinations); MySQL lock contention is covered by a skipped-by-default concurrency test that CI runs explicitly.
 - 14 pre-existing duplicate route names remain in the legacy surface and are allowlisted (R-26); Sanctum Scan route names are unique and asserted by a test.
-- Four legacy routes reference missing controller methods and are allowlisted (R-29); `route:list` needs a migrated database, so the MySQL job runs the boot smoke while the test suite asserts the registry.
+- Four legacy routes reference missing controller methods and are allowlisted (R-29); `route:list` needs migrated tables plus the virtual-card singleton fixture, so the MySQL job runs the boot smoke while the test suite asserts the registry.
 - M012–M014 provenance export/verifier code is absent from this revision.
 - ADR 0014 is absent; ADR 0012 and ADR 0015 disagree on the identity-gate status code (422 vs 403; code and API doc use 403).
 - `phpseclib/phpseclib 4.0.1` is locked and has an advisory.

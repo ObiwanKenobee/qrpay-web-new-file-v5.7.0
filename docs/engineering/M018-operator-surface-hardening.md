@@ -57,8 +57,8 @@ reserved for malformed data.
 | `composer check` | **92 tests, 1,015 assertions, 1 skipped (MySQL-only), green** |
 | G8 Pint | 27 changed PHP files pass |
 
-These are the M018 run. M019 later raised the suite to 94 tests / 1,017
-assertions / 30 changed files.
+These are the M018 run. M019 and the MySQL verification later raised the suite
+to 96 tests / 1,049 assertions / 32 changed files (2026-11-17).
 
 The PHPUnit "deprecated schema" notice comes from the pre-existing
 `phpunit.xml`, not from this test; it was present before M018.
@@ -80,7 +80,8 @@ The PHPUnit "deprecated schema" notice comes from the pre-existing
 - Identity, evidence, and dispute admin routes share the same middleware stack
   but are not individually enumerated; the settlement show/transition routes
   are the representative case.
-- CI and the MySQL job remain unexecuted (M017 limitation).
+- The MySQL job's step sequence runs green locally on MySQL 9.4 as of
+  2026-11-17; the GitHub run is still pending (M017 limitation, R-02).
 
 ## Next
 

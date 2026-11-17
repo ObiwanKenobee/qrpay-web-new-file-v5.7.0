@@ -61,8 +61,8 @@ lists can only shrink.
 | `composer audit --locked --no-dev` | one advisory, allowlisted with rationale; abandoned package warned |
 | `composer check` | **87 tests, 1,001 assertions, 1 skipped (MySQL-only), green** |
 
-These are the M017 run. After M019 the same command reports 94 tests /
-1,017 assertions and 1,927/950 tracked files at G1/G2.
+These are the M017 run. After M019 the same command reports 96 tests /
+1,049 assertions and 1,950/966 tracked files at G1/G2 (2026-11-17).
 
 Fail-closed demonstrations, each reverted afterwards:
 
@@ -91,9 +91,12 @@ Fail-closed demonstrations, each reverted afterwards:
 
 - The workflow has not executed on GitHub in this session. "Wired" is a
   repository fact; "green in CI" is not yet verified.
-- No MySQL server or Docker daemon was available locally. The G4 job is
-  unexecuted; the full legacy migration set may still fail on MySQL 8. The
-  first CI run is the evidence.
+- The G4/G5 step sequence was later executed locally on 2026-11-17 against a
+  disposable MySQL 9.4 instance: all migrations, the backfill down/up, the
+  route-introspection fixture, `route:list --json` (1,347 routes), and the
+  concurrency test (6 assertions) are green. Two MySQL-only migration defects
+  were found and fixed in the process; see `M019-evidence-versioning.md`. The
+  GitHub runner run remains the outstanding evidence (R-02).
 - G6 (PHPStan/Larastan) is not installed. Adding it requires a dependency and
   lock change; the ratchet is deferred (R-10 extension). The `composer check`
   entry point is the place to add it.

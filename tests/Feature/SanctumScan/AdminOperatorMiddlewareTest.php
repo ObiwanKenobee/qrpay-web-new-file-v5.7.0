@@ -301,7 +301,7 @@ class AdminOperatorMiddlewareTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        return (int) DB::table('sanctum_scan_exchanges')->insertGetId([
+        $exchangeId = (int) DB::table('sanctum_scan_exchanges')->insertGetId([
             'merchant_id' => $merchantId,
             'buyer_user_id' => $buyerId,
             'resource_id' => $resourceId,
@@ -316,6 +316,23 @@ class AdminOperatorMiddlewareTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        DB::table('sanctum_scan_exchange_payment_evidence')->insert([
+            'exchange_id' => $exchangeId,
+            'version' => 1,
+            'rail' => 'bank_transfer',
+            'reference' => 'MIDDLEWARE-REF-'.$exchangeId,
+            'amount' => '25000.00000000',
+            'currency' => 'KES',
+            'verification_status' => 'unverified',
+            'submitted_by_guard' => 'api',
+            'submitted_by_id' => $buyerId,
+            'submitted_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $exchangeId;
     }
 
     private function showUrl(int $exchangeId): string

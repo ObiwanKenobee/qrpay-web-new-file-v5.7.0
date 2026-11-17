@@ -24,7 +24,7 @@ return new class extends Migration
                 ->on('sanctum_scan_exchange_dispute_evidence')
                 ->onDelete('cascade');
 
-            $table->foreign('reviewed_by_admin_id')
+            $table->foreign('reviewed_by_admin_id', 'scan_evidence_review_admin_foreign')
                 ->references('id')
                 ->on('admins')
                 ->onDelete('restrict');

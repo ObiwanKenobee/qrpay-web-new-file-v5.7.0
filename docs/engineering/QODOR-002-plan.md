@@ -7,14 +7,15 @@
 **Target:** one reviewable pull request after the P0 branch repair, or two
 stacked pull requests as described in Phase 0.
 
-> **Implementation evidence:** `composer check` → 94 tests / 1,017 assertions / 1
-> MySQL-only skip; Pint passes on 30 changed PHP files; `php -l` clean on 950
-> tracked non-Blade PHP files; Sanctum route names unique and settlement actions
-> resolve. ADR 0016 gates are wired (M017), the production operator middleware
-> stack is tested (M018), ADR 0012 records the implemented 403 contract, the
-> superseded identity controller is deleted, and evidence is versioned so
-> rejection can be reopened (M019, ADR 0018). Remaining: first GitHub CI run and
-> the MySQL job (G4).
+> **Implementation evidence (2026-11-17):** `composer check` → 96 tests / 1,049
+> assertions / 1 MySQL-only skip; Pint passes on 32 changed PHP files; `php -l`
+> clean on 966 tracked non-Blade PHP files; Sanctum route names unique and
+> settlement actions resolve. ADR 0016 gates are wired (M017) and the MySQL job
+> sequence is green locally on MySQL 9.4 (migrations, route:list, backfill
+> down/up, concurrency). The production operator middleware stack is tested
+> (M018), ADR 0012 records the implemented 403 contract, the superseded identity
+> controller is deleted, and evidence is versioned so rejection can be reopened
+> (M019, ADR 0018). Remaining: first GitHub CI run and branch protection (R-02).
 
 ## Goal
 
@@ -452,13 +453,13 @@ failure with a tracking task; it may not be silently skipped.
       is verified separately by `AdminOperatorMiddlewareTest` (R-27, M018).
 - [x] Closed-exchange paths keep settlement consistent.
 - [x] Buyer/merchant projections include settlement; public scan does not.
-- [ ] MySQL backfill migration `up()`/`down()` tested — exercised on SQLite; the
-      MySQL job is pending.
-- [ ] MySQL concurrency test passes with one winner and one event — test is
-      written but skipped outside MySQL.
-- [ ] Full suite green in CI at the merged commit — green locally (94 tests /
-      1,017 assertions / 1 skip); CI workflow wired in M017, first GitHub run
-      pending.
+- [x] MySQL backfill migration `up()`/`down()` tested — rollback and re-migrate
+      green on MySQL 9.4 (2026-11-17).
+- [x] MySQL concurrency test passes with one winner and one event — 1 test,
+      6 assertions green on MySQL 9.4; skipped on SQLite.
+- [x] Full suite green in CI at the merged commit — green locally (96 tests /
+      1,049 assertions / 1 skip); MySQL job sequence green locally; first GitHub
+      run pending (R-02).
 - [x] Rejected evidence can be superseded by an append-only version and
       verification reopened (M019, ADR 0018).
 - [x] Documentation and ADR statuses updated; no feature claimed without

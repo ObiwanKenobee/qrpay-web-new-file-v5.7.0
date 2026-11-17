@@ -116,8 +116,10 @@ an entry no longer matches a violation:
   (R-29).
 
 `php artisan route:list --json` queries `virtual_card_apis` during boot, so the
-smoke command runs in the migrated MySQL job; the global assertions run inside
-the normal test suite, which boots without a seeded database.
+smoke command runs in the migrated MySQL job; the job seeds the singleton rows
+that legacy virtual-card constructors dereference (see the 2026-11-17
+amendment), while the global assertions run inside the normal test suite, which
+boots without a seeded database.
 
 ### G6 — Static analysis gate (ratcheting)
 
@@ -207,27 +209,40 @@ Adoption is complete when:
    result;
 5. the current boot blocker is fixed and the full suite result is recorded.
 
-Local status 2026-11-16: item 5 is satisfied. Items 1–3 were demonstrated
+Local status 2026-11-17: item 5 is satisfied. Items 1–3 were demonstrated
 locally with reverted probes: appending markers to `README.md` failed G1;
 appending a parse error to a tracked test failed G2; removing an allowlist entry
 for `POST global/get-states` failed the middleware assertion; removing
 `user.qr.scan` from the duplicate allowlist failed the uniqueness assertion.
-Item 4 is `composer check` (green locally: 94 tests, 1,017 assertions, 1
-MySQL-only skip). CI execution of the workflow itself remains unverified until
-the branch is pushed; the MySQL job is the highest-risk unexecuted step.
+Item 4 is `composer check` (green locally: 96 tests, 1,049 assertions, 1
+MySQL-only skip). The MySQL job's step sequence was also executed locally
+against MySQL 9.4 and is green; execution of the workflow on GitHub remains
+unverified until the branch is pushed (R-02).
 
-## Implementation status (2026-11-16)
+## Amendment 2026-11-17 — G5 route introspection fixture
+
+`php artisan route:list` instantiates each controller to collect its middleware.
+Ten legacy virtual-card controllers read `VirtualCardApi::first()` in their
+constructors, so the command cannot succeed on a migrated-but-unseeded database
+regardless of the branch under test. The MySQL job therefore runs
+`php artisan db:seed --class='Database\Seeders\RouteIntrospectionSeeder'` after
+`migrate:fresh`. The seeder writes only an admin row and one `virtual_card_apis`
+singleton with empty provider URLs; it is a gate fixture and is not part of
+`DatabaseSeeder`. Removing the fixture requires moving those ten constructor
+queries behind request-time resolution, which is a separate refactor.
+
+## Implementation status (2026-11-17)
 
 | Gate | Local status | CI status |
 |---|---|---|
-| G1 conflict markers | `tools/check-conflict-markers.php`: 1,927 files clean; fail-closed probe executed | Wired in `gates` job |
-| G2 PHP syntax | 950 non-Blade files clean; fail-closed probe executed | Wired in `gates` job |
-| G3 full suite | 94 tests, 1,017 assertions, 1 MySQL-only skip, green | Wired in `gates` job, full suite |
-| G4 MySQL migration/concurrency | Concurrency test written and skipped on SQLite; no local MySQL available | Wired in `mysql` job (unexecuted) |
-| G5 route registry | Global uniqueness, action resolution, middleware assertions with shrink-only allowlists; `route:list --json` smoke in MySQL job; fail-closed probes executed | Wired |
+| G1 conflict markers | `tools/check-conflict-markers.php`: 1,950 files clean; fail-closed probe executed | Wired in `gates` job |
+| G2 PHP syntax | 966 non-Blade files clean; fail-closed probe executed | Wired in `gates` job |
+| G3 full suite | 96 tests, 1,049 assertions, 1 MySQL-only skip, green | Wired in `gates` job, full suite |
+| G4 MySQL migration/concurrency | `migrate:fresh`, backfill down/up, and `SettlementConcurrencyTest` green on MySQL 9.4 (1 test, 6 assertions) | Wired in `mysql` job; GitHub run pending |
+| G5 route registry | Global uniqueness, action resolution, middleware assertions with shrink-only allowlists; `route:list --json` smoke resolves 1,347 routes on migrated MySQL after the introspection fixture | Wired in `mysql` job; GitHub run pending |
 | G6 PHPStan ratchet | PHPStan not installed | Deferred by recorded decision; no gate claimed |
 | G7 composer gates | `validate --strict` green; audit allowlist implemented and green | Wired in `gates` job |
-| G8 Pint | Passes on all 30 changed PHP files | Wired in `gates` job |
+| G8 Pint | Passes on all 32 changed PHP files | Wired in `gates` job |
 
 Boot-blocker verification item 5 is satisfied; items 1–4 are locally
-demonstrated, with CI execution pending under R-02.
+demonstrated, with GitHub execution pending under R-02.
