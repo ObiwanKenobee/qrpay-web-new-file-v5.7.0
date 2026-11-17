@@ -85,7 +85,7 @@ try {
         'to' => $result->to,
         'actor_id' => (int) $actorId,
     ], JSON_THROW_ON_ERROR).PHP_EOL);
-} catch (\\Throwable $exception) {
+} catch (\Throwable $exception) {
     fwrite(STDERR, get_class($exception).': '.$exception->getMessage().PHP_EOL);
     exit(1);
 }
