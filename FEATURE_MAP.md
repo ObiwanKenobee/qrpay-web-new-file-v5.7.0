@@ -2,7 +2,7 @@
 
 **Status:** Continuously reconciled feature map  
 **Date:** 2026-11-17  
-**Branch:** `main` at `e9cdf766`; current stacked work: M020 PR #25, M021 PR #26, M022 PR #27, M023 PR #28, M024 PR #29, M024-A PR #30, and M025 PR #31 (all unmerged)
+**Branch:** `main` at `e9cdf766`; current stacked work: M020 PR #25, M021 PR #26, M022 PR #27, M023 PR #28, M024 PR #29, M024-A PR #30, and M025 PR #32 (all unmerged)
 
 ## Status legend
 
