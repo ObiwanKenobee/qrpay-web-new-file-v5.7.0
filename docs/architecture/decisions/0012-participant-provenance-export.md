@@ -1,52 +1,17 @@
-# ADR 0012: Participant-scoped provenance export
+# Legacy provenance design note — canonical decision ADR 0020
 
-- **Status:** Proposed implementation
-- **Date:** 2026-11-13
-- **Scope:** Read-only provenance export for an existing Sanctum Scan exchange dispute
+**Status:** Compatibility pointer; not a canonical ADR  
+**Original draft date:** 2026-11-13
 
-## Context
+This historical path was originally titled “ADR 0012: Participant-scoped
+provenance export”. The identifier 0012 is already assigned to the accepted
+buyer identity verification decision:
+[`ADR 0012 — Buyer identity verification prerequisite`](0012-buyer-identity-verification-prerequisite.md).
 
-Milestones 005–011 establish an exchange record, bilateral dispute statements, private evidence, platform review, independent institutional attestations, versioned corrections and withdrawals, and separately attributable reassessments. These records are useful individually, but a participant needs a portable way to inspect the connected history without copying private database records or exposing internal storage details.
+Do not cite this file as ADR 0012. The implemented participant-scoped export
+decision is now recorded canonically in
+[`ADR 0020 — Participant-scoped provenance export`](../../decisions/0020-participant-scoped-provenance-export.md).
 
-The README roadmap calls for audit records and a real-world exchange pilot. The next increment should make the existing evidence trail exportable while preserving the access boundaries already enforced by the exchange and dispute services.
-
-## Decision
-
-Provide an authenticated, read-only JSON provenance manifest to the buyer and merchant on the exchange.
-
-The export contains:
-
-- A bounded exchange snapshot: exchange ID and state, resource snapshot, agreed quantity, unit, amount, currency, terms and lifecycle timestamps.
-- A bounded dispute snapshot: dispute ID, category, state, resolution summary and lifecycle timestamps.
-- Participant dispute messages with message type, body, generalized actor type and timestamp.
-- Existing evidence presentation, including file name, MIME type, size, SHA-256, caption and submitting party role; the existing platform review; independent attestations; versioned revisions; appeals and process decisions; and linked reassessments.
-- A filtered exchange timeline containing event ID/type, description, verification status, generalized actor type and recorded time.
-
-The manifest includes format, schema version, generation timestamp, hash algorithm, hash scope and a SHA-256 digest over the `data` object. The digest is computed from compact JSON using UTF-8, unescaped slashes and Unicode, invalid-UTF-8 substitution, and preserved zero fractions. The generation timestamp is outside the hashed data so identical snapshots yield identical digests.
-
-## Authorization and privacy
-
-- The existing authenticated API user and merchant route groups are used; the authenticated guard determines the participant identity.
-- The service first scopes the exchange to the buyer or merchant account, then resolves its dispute and evidence.
-- An unrelated account receives the existing not-found behavior; unauthenticated requests remain unauthorized.
-- The export does not return buyer/merchant database IDs, internal actor IDs, raw event payloads, private storage disk/path, uploaded file bytes or dedicated structured payment-reference fields.
-- Event and message actor IDs are converted to broad actor types such as `authenticated_user`, `merchant_account`, `platform_administrator` or `system`.
-- Exchange terms, participant message bodies, resolution summaries, evidence captions and original file names are retained as recorded. They may themselves contain payment references, contact details or other sensitive information; the export does not rewrite participant statements. Consumers must treat the manifest as private dispute data and review it before sharing.
-- Original uploaded evidence remains accessible only through existing participant-scoped routes that verify the stored SHA-256 before streaming.
-
-## Consequences
-
-### Positive
-
-- Exchange participants can retain a portable snapshot of the evidence and decision trail.
-- The manifest digest helps detect accidental alteration after export.
-- Existing evidence, review and verifier records remain the source of truth; the export is a read-only projection.
-- Buyer and merchant receive the same underlying snapshot and digest, improving the ability to compare copies.
-
-### Trade-offs and non-goals
-
-- The digest detects changes to the exported snapshot; it is not a digital signature, proof of authorship, external timestamp, legal certification or proof that the underlying claims are true.
-- The manifest covers the records visible at generation time. Later events produce a new snapshot and digest; prior exports are not revoked.
-- The export does not include private file bytes, provider payment credentials, dedicated payment-reference fields, wallet ledgers or settlement evidence. This does not prevent a participant from having typed a payment reference or other sensitive detail into a free-text field that is included in the export.
-- It does not create a new adjudication authority or change the status of an exchange or dispute.
-- Canonical hashing depends on preserving JSON object key order and using the documented serialization flags when verifying the digest.
+This pointer is intentionally retained so existing links to the historical
+design note continue to resolve. The canonical record contains the implemented
+contract, privacy boundary, hashing rules, limitations and test evidence.
