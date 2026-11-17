@@ -2,7 +2,7 @@
 
 **Status:** Continuously reconciled feature map  
 **Date:** 2026-11-17  
-**Branch:** `main` at `e9cdf766`; M020 in progress on `sanctum-scan/m020-evidence-decision-binding`
+**Branch:** `main` at `e9cdf766`; M020 in progress on PR #25 and M021 in progress on `sanctum-scan/m021-canonical-provenance-adrs`
 
 ## Status legend
 
@@ -122,15 +122,16 @@ All entries are **Implemented (static)** unless noted. Legacy features have no a
 | M009 | Credentials, conflicts, appeals | Implemented (static): credential reviews, conflict declarations, appeals/decisions | `EconomicExchangeLifecycleTest` governance scenarios | ADR 0009; API guide |
 | M010 | Versioned attestation corrections + withdrawal | Implemented (static): immutable versions, terminal withdrawal | `EconomicExchangeLifecycleTest` revision scenarios | ADR 0010; API guide |
 | M011 | Independent reassessment | Implemented (static): new mandate, different member, append-only link | `EconomicExchangeLifecycleTest` reassessment scenarios | ADR 0011; API guide |
-| M012 | Participant-scoped provenance export | Implemented: buyer/merchant scoped JSON manifest, exchange/dispute timeline, evidence and governance history, SHA-256 digest | `EconomicExchangeLifecycleTest::test_exchange_participants_can_export_a_hashed_provenance_manifest_without_private_storage_or_actor_identifiers` | Provenance export API guide; legacy design note requires ADR-ID reconciliation |
-| M013 | Offline provenance manifest verifier | Implemented: bounded offline Artisan verifier for schema 1.0.0 manifests | `ProvenanceManifestVerifierTest`, `ProvenanceManifestVerifierCommandTest` | Offline provenance verifier guide; command `sanctum-scan:verify-provenance` |
-| M014 | Provenance verifier hardening | Implemented: structural, digest, revision and reassessment consistency checks | `ProvenanceManifestVerifierTest` | Legacy hardening note exists; its ADR identifier conflicts with the canonical index and is tracked for M021 reconciliation |
+| M012 | Participant-scoped provenance export | Implemented: buyer/merchant scoped JSON manifest, exchange/dispute timeline, evidence and governance history, SHA-256 digest | `EconomicExchangeLifecycleTest::test_exchange_participants_can_export_a_hashed_provenance_manifest_without_private_storage_or_actor_identifiers` | [ADR 0020](docs/decisions/0020-participant-scoped-provenance-export.md); provenance export API guide |
+| M013 | Offline provenance manifest verifier | Implemented: bounded offline Artisan verifier for schema 1.0.0 manifests | `ProvenanceManifestVerifierTest`, `ProvenanceManifestVerifierCommandTest` | [ADR 0021](docs/decisions/0021-offline-provenance-manifest-verification.md); offline verifier guide; command `sanctum-scan:verify-provenance` |
+| M014 | Provenance verifier hardening | Implemented: structural, digest, revision and reassessment consistency checks | `ProvenanceManifestVerifierTest` | [ADR 0022](docs/decisions/0022-provenance-verifier-consistency-hardening.md) |
 | M015 | Manual buyer identity review + optional gate | Implemented: append-only admin review and optional acceptance prerequisite | `EconomicExchangeLifecycleTest` identity scenarios; `AdminOperatorMiddlewareTest` production-stack coverage | ADR 0012/0015 and API guide; implemented denial contract is 403 |
 | M016 | Payment settlement state machine | Implemented: typed transition table, actor-bound manager, atomic evidence submission, cancellation consistency and admin API; no fund movement | `SettlementStateMachineTest`, `SettlementLifecycleTest`, `SettlementBackfillMigrationTest`, MySQL-only `SettlementConcurrencyTest` | ADR 0016/0017, QODOR-002; GitHub CI execution still pending |
 | M017 | Deterministic verification gates | Implemented: G1/G2/G3/G4/G5/G7/G8 wired; G6 deferred | `composer check`, `RouteRegistryTest`, MySQL gate sequence | ADR 0016; GitHub Actions execution and branch protection pending |
 | M018 | Operator-surface hardening | Implemented: real admin middleware stack exercised; duplicate identity controller removed | `AdminOperatorMiddlewareTest` | M018 record; ADR 0012 contract aligned |
 | M019 | Settlement evidence versioning | Implemented: append-only version chain and buyer-only resubmission after rejection | `SettlementLifecycleTest`, `PaymentEvidenceVersioningMigrationTest` | ADR 0018; unsafe rollback after multiple versions remains a limitation |
 | M020 | Evidence-version-bound settlement decisions | In progress on M020 branch: immutable decisions bind exact evidence ID/version/fingerprint | `SettlementLifecycleTest` assertions added; execution pending | ADR 0019; no schema migration required |
+| M021 | Canonical provenance ADR reconciliation | In progress: canonical ADRs 0020–0022 registered; legacy paths retained as compatibility pointers | Documentation/path review; no runtime code change | [M021 engineering record](docs/engineering/M021-canonical-provenance-adrs.md); [ADR index](docs/decisions/README.md) |
 
 **Coupling fact:** M002–M020 Sanctum Scan services do not move funds and do not read/write legacy wallet or transaction tables. Preserve this boundary.
 
@@ -243,8 +244,8 @@ There is no documented server-to-server merchant settlement webhook in the QR ga
 | M012–M014 were docs-only or absent | Superseded by merged code: participant-scoped provenance export route/controller and lifecycle test; offline verifier Artisan command and unit/command tests; structural consistency hardening. See `SanctumScanDisputeEvidenceController::provenanceExport`, `ProvenanceManifestVerifier`, and the M012–M014 test/doc records. |
 | M016 settlement was planned or incomplete | Superseded by merged implementation: typed state machine, locked manager, buyer evidence transition, administrator endpoint, participant projections, backfill and tests. It records settlement assertions and moves no funds. |
 | M015 remained in progress with duplicate identity controller | Superseded by M018: the duplicate controller was removed; the real admin middleware stack is exercised by `AdminOperatorMiddlewareTest`; the implemented identity-gate contract is 403. |
-| ADR 0014 was missing | A legacy proposed provenance-hardening note exists at `docs/architecture/decisions/0014-provenance-verifier-consistency-hardening.md`; it conflicts with the canonical ADR index, which reserves 0014. M021 must reconcile the legacy 0012/0013/0014 provenance notes without rewriting accepted identity/quantity ADRs or breaking links. |
-| Provenance ADR links pointed to identity/quantity ADRs | The legacy proposed participant-export and offline-verifier notes use duplicate IDs 0012 and 0013. Canonical new decisions live in `docs/decisions/README.md`; duplicate legacy identifiers are tracked for M021. |
+| ADR 0014 was missing | The canonical index intentionally leaves 0014 unassigned. The former proposal file is now a compatibility pointer to implemented ADR 0022. |
+| Provenance ADR links pointed to identity/quantity ADRs | Reconciled in M021: canonical provenance decisions are ADR 0020 (export), ADR 0021 (offline verifier) and ADR 0022 (consistency hardening), listed in `docs/decisions/README.md`. |
 | API docs did not reflect current settlement behavior | Buyer/merchant payment-evidence projections expose the latest version; admin history includes all versions; M020 adds evidence ID/version/fingerprint to settlement decision events. |
 | Settlement evidence versioning has no rollback caveat | ADR 0018 documents that `down()` cannot restore a one-row-per-exchange constraint once multiple versions exist without destroying history. Explicit fail-safe rollback enforcement and tests remain M023. |
 

@@ -1,7 +1,7 @@
 # Roadmap Status — QRPay / Sanctum Scan
 
 **Date:** 2026-11-17
-**Branch:** `main` with M020 in progress on `sanctum-scan/m020-evidence-decision-binding`
+**Branch:** `main` with M020 in progress on PR #25 and M021 in progress on `sanctum-scan/m021-canonical-provenance-adrs`
 **Method:** roadmap phases from [`README.md`](../README.md#13-development-roadmap) mapped to repository evidence per ADR 0017. A capability is only **Verified** when an executed test or command proves it; roadmap checkboxes are not evidence.
 
 **Current executed baseline:** `composer check` → 96 tests, 1,049 assertions, 1 skipped (MySQL-only concurrency test), green on SQLite; G1, G2, G7, G8 green. Pint passes on all 32 changed PHP files. The MySQL job's full step sequence is green locally on MySQL 9.4 (migrations, route:list 1,347 routes, backfill down/up, concurrency test); only the GitHub runner run is pending.
@@ -22,7 +22,7 @@ Status vocabulary (ADR 0017): **Planned** · **In progress** · **Implemented** 
 | Identity references | Implemented | M015 checks and optional gate; ADR 0012 now records the implemented 403 contract |
 | Transaction intents | Verified | offer/accept/decline lifecycle in `EconomicExchangeLifecycleTest` |
 | API contracts | Verified | HTTP tests for buyer/merchant/admin Sanctum routes |
-| Verification and signature requirements | In progress | M008–M014 provide independent verification, participant-scoped provenance export, offline SHA-256 manifest verification and verifier-consistency checks; cryptographic signing and trusted timestamps remain absent. Duplicate legacy ADR identifiers are tracked for M021 reconciliation. |
+| Verification and signature requirements | In progress | M008–M014 provide independent verification, participant-scoped provenance export, offline SHA-256 manifest verification and verifier-consistency checks (ADRs 0020–0022); cryptographic signing and trusted timestamps remain absent. M012 snapshot consistency under concurrent writes remains a separate M026 follow-up. |
 | Repository conventions | Implemented | [`ENGINEERING_STANDARDS.md`](../ENGINEERING_STANDARDS.md); ADR 0016 gates wired in M017; CI execution and PHPStan ratchet pending |
 | Initial technical documentation | Implemented | README plus architecture/feature/testing/ADR set; known drift tracked in R-13 |
 
@@ -82,11 +82,18 @@ Planned. No cross-border, multicurrency settlement, or international identity in
 The event now records the exact evidence row, version and deterministic
 fingerprint for verification, rejection and settlement decisions.
 
-The next engineering priorities are M021 (canonical ADR identifier
-reconciliation), M022 (genuine concurrent manager-transition testing), and
-M023 (explicit protection against destructive evidence-version rollback).
-M024 addresses the admin reconciliation interface; M025 defines the pilot's
-participant/value-chain scope and outcome measures.
+**M021 — Canonical provenance ADR reconciliation** is in progress on
+`sanctum-scan/m021-canonical-provenance-adrs`: [engineering record](M021-canonical-provenance-adrs.md).
+Canonical ADRs 0020–0022 now describe M012–M014, while the old paths remain as
+compatibility pointers. ADRs 0012/0013 remain unchanged and 0014 remains
+unassigned.
+
+The next engineering priorities are M022 (genuine concurrent
+manager-transition testing) and M023 (explicit protection against destructive
+evidence-version rollback). M024 addresses the admin reconciliation interface;
+M025 defines the pilot's participant/value-chain scope and outcome measures.
+M026 tracks a consistent-database-snapshot guarantee for M012 exports, which
+currently compose provenance context and evidence from separate reads.
 
 The M017 operational gate remains open: GitHub Actions must execute the gates
 successfully and branch protection must require them (R-02). Local success is
