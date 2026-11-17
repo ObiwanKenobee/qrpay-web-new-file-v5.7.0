@@ -1,7 +1,7 @@
 # Roadmap Status — QRPay / Sanctum Scan
 
 **Date:** 2026-11-17
-**Branch:** `main` with stacked, unmerged work through M024-A (PRs #25–#30)
+**Branch:** `main` with stacked, unmerged work through M025 (PRs #25–#31)
 **Method:** roadmap phases from [`README.md`](../README.md#13-development-roadmap) mapped to repository evidence per ADR 0017. A capability is only **Verified** when an executed test or command proves it; roadmap checkboxes are not evidence.
 
 **Last recorded local baseline (before M020–M024):** `composer check` → 96 tests, 1,049 assertions, 1 skipped (MySQL-only concurrency test), green on SQLite; G1, G2, G7, G8 green. Pint passed on all 32 PHP files in that earlier revision. The MySQL job's full step sequence was green locally on MySQL 9.4 (migrations, route:list 1,347 routes, backfill down/up, concurrency test). This historical baseline does not validate M020–M024 or M024-A.
