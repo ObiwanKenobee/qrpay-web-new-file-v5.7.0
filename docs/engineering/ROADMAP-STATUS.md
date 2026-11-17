@@ -8,7 +8,7 @@
 
 Status vocabulary (ADR 0017): **Planned** · **In progress** · **Implemented** · **Verified** · **Retired**.
 
-**Hard boundary:** M002–M016 services do not move funds and do not read or write legacy wallet/transaction tables. No roadmap item below changes that boundary.
+**Hard boundary:** M002–M020 Sanctum Scan services do not move funds and do not read or write legacy wallet/transaction tables. M020 only binds immutable review events to evidence versions. No roadmap item below changes that financial boundary.
 
 ---
 
