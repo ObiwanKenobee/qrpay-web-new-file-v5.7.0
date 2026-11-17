@@ -23,6 +23,20 @@ This strategy starts from what the repository can prove today, not from an assum
 
 **Mainline baseline:** not established. Running `main` in an isolated copy was blocked by sandbox policy in this session. Do not claim mainline tests pass until they are executed.
 
+### Post-repair evidence (2026-11-16)
+
+| Command | Result |
+|---|---|
+| `composer check` | **94 tests, 1,017 assertions, 1 skipped** (MySQL-only concurrency test), green; G1, G2, G7, G8 also green |
+| `php tools/check-conflict-markers.php` | 1,927 tracked text files clean; a probe file with markers fails the gate |
+| `php tools/check-php-syntax.php` | 950 non-Blade PHP files clean, 715 Blade templates skipped; a probe parse error fails the gate |
+| `./vendor/bin/pint --test` on 30 changed PHP files | PASS |
+| `composer validate --strict --no-check-publish` | Valid after relaxing the exact `authorizenet/authorizenet` pin to `~2.0.3` |
+| `composer audit --locked --no-dev` | One advisory (phpseclib) allowlisted with rationale under R-28; abandoned package warned |
+| `php artisan route:list --json` | Blocked locally: boot queries `virtual_card_apis` before a database is available; the MySQL CI job runs this after `migrate:fresh` |
+
+The suite is green on SQLite. Concurrency safety is asserted only by the MySQL-gated test, never by SQLite. The MySQL CI job has not executed yet because no local MySQL or Docker daemon was available.
+
 ### Discovery vs execution
 
 - Test methods found: 58 (`35 + 9 + 7 + 7` across four Sanctum Scan suites).
@@ -37,7 +51,14 @@ This strategy starts from what the repository can prove today, not from an assum
 | [`ScanReferenceResolutionTest.php`](tests/Feature/SanctumScan/ScanReferenceResolutionTest.php) | 7 | hash-only storage, expiry, revocation, uniform 404, issuer validation | Services-only; no HTTP contract |
 | [`MerchantScanReferenceLifecycleTest.php`](tests/Feature/SanctumScan/MerchantScanReferenceLifecycleTest.php) | 7 | owner scoping, actor attribution, anonymous rejection, live merchant name, inactive/soft-deleted merchant | No admin/ops paths |
 | [`EconomicResourceRegistryTest.php`](tests/Feature/SanctumScan/EconomicResourceRegistryTest.php) | 9 | publish, variety requirement, QR rotation, archival revocation, unique codes, cross-merchant denial | No public page render; no QR image test |
-| [`EconomicExchangeLifecycleTest.php`](tests/Feature/SanctumScan/EconomicExchangeLifecycleTest.php) | 35 | exchange lifecycle, payment evidence, disputes, evidence privacy/review, verifier governance, revisions, reassessment, appeals, identity gate | No settlement; no concurrency; no admin role/2FA; no exhaustive transition matrix |
+| [`EconomicExchangeLifecycleTest.php`](tests/Feature/SanctumScan/EconomicExchangeLifecycleTest.php) | 35 | exchange lifecycle, payment evidence, disputes, evidence privacy/review, verifier governance, revisions, reassessment, appeals, identity gate, settlement projection | No MySQL concurrency; no admin role/2FA |
+| [`SettlementStateMachineTest.php`](tests/Unit/SanctumScan/SettlementStateMachineTest.php) | 10 | exhaustive 6×6×4 transition matrix, terminal sources, guard restrictions, unknown statuses, target listing | Pure unit; no database |
+| [`SettlementLifecycleTest.php`](tests/Feature/SanctumScan/SettlementLifecycleTest.php) | 9 | buyer evidence transition, admin show/verify/reject/settle, rejection then versioned resubmission and reopened verification, terminal and stale conflicts, authorisation, amount mismatch, decline/cancel/expiry, participant vs public projections | Admin operator middleware (mode/RBAC) disabled here; covered by `AdminOperatorMiddlewareTest` |
+| [`AdminOperatorMiddlewareTest.php`](tests/Feature/SanctumScan/AdminOperatorMiddlewareTest.php) | 5 | production admin stack: super-admin read + transition, role-less logout, missing permission 404, demo-mode write rejection, pending 2FA redirect | Uses a handcrafted role/permission schema; settlement show/transition is the representative route pair |
+| [`SettlementBackfillMigrationTest.php`](tests/Feature/SanctumScan/SettlementBackfillMigrationTest.php) | 1 | closed-exchange backfill up/down, idempotence, verified/rejected rows untouched | Runs on SQLite; MySQL up/down still required by G4 |
+| [`PaymentEvidenceVersioningMigrationTest.php`](tests/Feature/SanctumScan/PaymentEvidenceVersioningMigrationTest.php) | 1 | composite `(exchange_id, version)` unique key, old unique removed, `down()` restoration | SQLite only; rollback after a version 2 row exists is intentionally rejected |
+| [`SettlementConcurrencyTest.php`](tests/Feature/SanctumScan/SettlementConcurrencyTest.php) | 1 | InnoDB lock-wait contention, one winner, one settlement event, stale expected-status loser | MySQL-only; skipped unless `SANCTUM_SETTLEMENT_CONCURRENCY=1` |
+| [`RouteRegistryTest.php`](tests/Feature/RouteRegistryTest.php) | 5 | Sanctum uniqueness; global uniqueness with a shrink-only legacy allowlist; action resolution; write-route middleware with a public allowlist; settlement actions resolve | 14 legacy duplicates and 4 dead routes are allowlisted (R-26, R-29) |
 | [`EnvironmentTemplateSecurityTest.php`](tests/Feature/EnvironmentTemplateSecurityTest.php) | 2 | no pre-generated `APP_KEY`; UTC default | Cannot boot in this revision |
 | `ExampleTest` files | 2 | framework smoke | Not meaningful coverage |
 
@@ -49,15 +70,24 @@ This strategy starts from what the repository can prove today, not from an assum
 - SQLite does not implement `lockForUpdate` with row-level blocking, so the tests cannot prove the concurrency-safety claims in the roadmap.
 - Only 4 factories exist (`User`, `UserProfile`, `Admin`, `Currency`); there are no merchant, agent, wallet, exchange, resource, dispute, or verifier factories.
 
-### CI coverage (verified)
+### CI coverage (implemented 2026-11-16)
 
-[`.github/workflows/sanctum-scan-php-lint.yml`](.github/workflows/sanctum-scan-php-lint.yml):
+[`.github/workflows/sanctum-scan-php-lint.yml`](.github/workflows/sanctum-scan-php-lint.yml) now runs on every push and every pull request:
 
-- Triggers on pushes to `sanctum-scan/**` and pull requests targeting `main`.
-- Lints only changed PHP files.
-- Installs dependencies and runs **one** test file: `tests/Feature/SanctumScan/EconomicExchangeLifecycleTest.php`.
-- Does not run Pint, PHPStan, `composer audit`, migrations, MySQL, or the frontend build.
-- Does not trigger on `feature/*` pushes, including the current branch.
+- **`gates` job** — PHP 8.2, SQLite in-memory:
+  - G1 conflict markers (`tools/check-conflict-markers.php`);
+  - G2 `php -l` over every tracked non-Blade PHP file;
+  - G3 full PHPUnit suite with no file allowlist;
+  - G7 `composer validate --strict` and the advisory gate;
+  - G8 `pint --test` on changed PHP files.
+  - The same commands run locally through `composer check` (`tools/verify.sh`).
+- **`mysql` job** — MySQL 8 service:
+  - `php artisan migrate:fresh --force`;
+  - `php artisan route:list --json` (the G5 boot smoke that needs real tables);
+  - rollback and re-apply of the newest settlement backfill migration;
+  - `SANCTUM_SETTLEMENT_CONCURRENCY=1` concurrency test.
+
+Still not covered: PHPStan/Larastan (not installed; no gate claimed), a frontend build (no `package-lock.json`), and branch protection. The workflow itself has not executed on GitHub yet; treat CI status as unverified until the first push.
 
 ---
 
@@ -197,38 +227,29 @@ Run on MySQL 8 with separate processes or connections.
 
 ## 7. CI design
 
-Recommended workflow shape:
+Implemented shape (ADR 0016, M017):
 
 ```yaml
-on:
-  push:
-    branches: ['**']
-  pull_request:
-    branches: ['**']
+on: [push, pull_request]
 
 jobs:
-  static:
-    # conflict markers, php -l all files, composer validate, pint --test
-  unit:
-    # phpunit tests/Unit
-  feature-sqlite:
-    # phpunit tests/Feature with RefreshDatabase
-  feature-mysql:
+  gates:
+    # conflict markers, php -l all tracked files, full phpunit,
+    # composer validate --strict + audit gate, pint --test on changed files
+  mysql:
     services:
-      mysql: { image: 'mysql:8', env: { MYSQL_DATABASE: testing, ... } }
-    # migrate:fresh + phpunit
-  security:
-    # route allowlist, authorization matrix, webhook signature tests, composer audit
-  frontend:
-    # npm ci && npm run build (requires a committed lockfile)
+      mysql: { image: 'mysql:8.0' }
+    # migrate:fresh, route:list --json, backfill down/up,
+    # SANCTUM_SETTLEMENT_CONCURRENCY=1 concurrency test
 ```
 
 Rules:
 
 - No `continue-on-error` for required jobs.
-- Cache Composer/npm dependencies, not `vendor/`.
-- Pin the PHP version used in production; test the minimum supported PHP (8.2) and the CI version (8.3) until the support policy is updated.
-- Upload PHPUnit output and coverage artifacts.
+- Cache Composer dependencies, not `vendor/`.
+- Test the minimum supported PHP version declared in `composer.json` (8.2).
+- Upload PHPUnit output and coverage artifacts when the suite grows beyond its current runtime.
+- The frontend build stays out of CI until a lockfile is committed; no gate pretends otherwise.
 
 ---
 
@@ -249,44 +270,29 @@ Do not optimize for a single global percentage. Use capability-level gates:
 
 ---
 
-## 9. QODOR-002 test plan (settlement slice)
+## 9. QODOR-002 settlement test plan (implemented)
 
-Add:
+Delivered:
 
-1. `tests/Unit/SanctumScan/ExchangeSettlementStateMachineTest.php`
-   - Data-provider matrix for every `(current, target)` pair.
-   - Assert system-only transitions.
-   - Assert cancellation from every non-terminal state.
-   - Assert invalid targets return a typed error, not a string.
+1. `tests/Unit/SanctumScan/SettlementStateMachineTest.php` — independent expectation table; every `(from, to, guard)` combination; terminal sources; unknown/same-status rejection; target listing; `assertKnownStatus`.
+2. `tests/Feature/SanctumScan/SettlementLifecycleTest.php` — buyer evidence advances settlement exactly once; admin show/verify/reject/settle; terminal, repeated, stale, and illegal transitions write no event; unauthenticated/non-admin callers denied; amount mismatch leaves settlement untouched; decline/cancel/expiry cancel settlement with the correct guard; participant projections include settlement; public scan payload does not.
+3. `tests/Feature/SanctumScan/SettlementBackfillMigrationTest.php` — backfill `up()`/`down()`, idempotence, and non-`awaiting_payment` rows untouched.
+4. `tests/Feature/SanctumScan/SettlementConcurrencyTest.php` — MySQL-only: proves row-lock contention, one winning transition, one event, and a stale loser.
+5. `tests/Feature/RouteRegistryTest.php` — Sanctum and global route-name uniqueness (with shrink-only legacy allowlists), action resolution, write-route middleware, and settlement action resolution.
+6. `tests/Feature/SanctumScan/AdminOperatorMiddlewareTest.php` — the unmodified production admin stack: role guard (logout/404), app-mode write block, and pending-2FA redirect (M018).
 
-2. `tests/Feature/SanctumScan/SettlementLifecycleTest.php`
-   - Payment evidence submission advances `awaiting_payment -> payment_evidence_submitted` exactly once.
-   - Admin verify/reject/settle endpoints enforce admin auth, role, and 2FA.
-   - Buyer/merchant cannot drive verification or settlement.
-   - Settlement status is visible to participants only as a status, never as proof of provider settlement.
-   - No wallet/transaction row is created or modified (assert table counts/balances before and after).
-
-3. `tests/Feature/SanctumScan/SettlementMigrationTest.php`
-   - Migration applies on MySQL; columns/defaults/index exist.
-   - Existing exchanges backfill to `awaiting_payment`.
-
-4. `tests/Feature/SanctumScan/SettlementAuthorizationTest.php`
-   - IDOR across exchanges.
-   - Merchant cannot settle.
-   - Unauthenticated request rejected.
-   - Duplicate settle request is idempotent or rejected deterministically.
-
-5. Extend the boot smoke test and route inventory test to include the new admin route names.
+Wired in M017: the workflow triggers on every branch and PR, runs the full suite, and includes a MySQL job with `SANCTUM_SETTLEMENT_CONCURRENCY=1` and the settlement backfill down/up. The MySQL job is unexecuted until the first push. PHPStan remains deferred because it is not installed (no gate claimed).
 
 ---
 
 ## 10. Exit criteria for the testing milestone
 
-- The suite boots and runs at HEAD.
-- CI runs on every branch/PR and executes all tests.
-- Feature tests use real migrations; MySQL job passes.
-- Settlement has an exhaustive matrix and an HTTP lifecycle test.
-- Route names are unique and public routes are allowlisted.
-- Static analysis and Pint pass.
-- `composer audit` is clean or the remaining advisory is documented and accepted.
-- No test claims concurrency safety on SQLite.
+- [x] The suite boots and runs at HEAD.
+- [x] CI runs on every branch/PR and executes all tests (workflow wired; first GitHub run pending).
+- [ ] Feature tests use real migrations; MySQL job passes (job wired, unexecuted).
+- [x] Settlement has an exhaustive matrix and an HTTP lifecycle test.
+- [x] Route names are unique and public routes are allowlisted (legacy debt tracked).
+- [ ] Static analysis passes (PHPStan not installed; deferred).
+- [x] Pint passes on changed files.
+- [x] `composer audit` is clean or the remaining advisory is documented and accepted (R-28).
+- [x] No test claims concurrency safety on SQLite.

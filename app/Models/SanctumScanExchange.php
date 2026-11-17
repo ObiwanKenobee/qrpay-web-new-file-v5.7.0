@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use App\Models\Merchants\Merchant;
-use App\Models\SanctumScanResource;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -25,6 +24,7 @@ class SanctumScanExchange extends Model
         'dispatched_at' => 'immutable_datetime',
         'received_at' => 'immutable_datetime',
         'cancelled_at' => 'immutable_datetime',
+        'settlement_status_updated_at' => 'immutable_datetime',
     ];
 
     public function merchant(): BelongsTo
@@ -50,7 +50,14 @@ class SanctumScanExchange extends Model
 
     public function paymentEvidence(): HasOne
     {
-        return $this->hasOne(SanctumScanExchangePaymentEvidence::class, 'exchange_id');
+        return $this->hasOne(SanctumScanExchangePaymentEvidence::class, 'exchange_id')
+            ->latestOfMany('version');
+    }
+
+    public function paymentEvidences(): HasMany
+    {
+        return $this->hasMany(SanctumScanExchangePaymentEvidence::class, 'exchange_id')
+            ->orderBy('version');
     }
 
     public function dispute(): HasOne

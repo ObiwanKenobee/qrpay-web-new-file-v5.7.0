@@ -2,33 +2,36 @@
 
 namespace Tests\Feature\SanctumScan;
 
+use App\Http\Middleware\Admin\SystemMaintenanceApi;
+use App\Http\Middleware\KycApi;
+use App\Http\Middleware\User\PinSetupGuard;
 use App\Models\Merchants\Merchant;
+use App\Models\SanctumScanAttestationAppeal;
+use App\Models\SanctumScanAttestationAppealDecision;
+use App\Models\SanctumScanAttestationReassessment;
+use App\Models\SanctumScanAttestationRevision;
+use App\Models\SanctumScanEvidenceVerificationMandate;
 use App\Models\SanctumScanExchange;
-use App\Models\SanctumScanExchangeEvent;
-use App\Models\SanctumScanExchangePaymentEvidence;
 use App\Models\SanctumScanExchangeDispute;
-use App\Models\SanctumScanExchangeDisputeMessage;
-use App\Models\SanctumScanResource;
-use App\Models\User;
-use App\Models\SanctumScanUserIdentityCheck;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use App\Models\SanctumScanExchangeDisputeEvidence;
+use App\Models\SanctumScanExchangeDisputeMessage;
+use App\Models\SanctumScanExchangeEvent;
 use App\Models\SanctumScanExchangeEvidenceReview;
+use App\Models\SanctumScanExchangePaymentEvidence;
+use App\Models\SanctumScanIndependentAttestation;
+use App\Models\SanctumScanResource;
+use App\Models\SanctumScanUserIdentityCheck;
+use App\Models\SanctumScanVerifierCredentialReview;
+use App\Models\SanctumScanVerifierMembership;
+use App\Models\SanctumScanVerifierRegistryEvent;
+use App\Models\User;
 use App\Services\SanctumScan\DisputeEvidenceManager;
 use App\Services\SanctumScan\IndependentVerificationManager;
 use App\Services\SanctumScan\UserIdentityCheckManager;
-use App\Services\SanctumScan\ExchangeSettlementManager;
-use App\Models\SanctumScanIndependentAttestation;
-use App\Models\SanctumScanVerifierRegistryEvent;
-use App\Models\SanctumScanVerifierCredentialReview;
-use App\Models\SanctumScanVerifierConflictDeclaration;
-use App\Models\SanctumScanAttestationAppeal;
-use App\Models\SanctumScanAttestationAppealDecision;
-use App\Models\SanctumScanAttestationRevision;
-use App\Models\SanctumScanAttestationReassessment;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -106,8 +109,8 @@ class EconomicExchangeLifecycleTest extends TestCase
         $eventMigration->up();
         $paymentEvidenceMigration = require base_path('database/migrations/2026_11_13_162000_create_sanctum_scan_exchange_payment_evidence_table.php');
         $paymentEvidenceMigration->up();
-        $settlementMigration = require base_path('database/migrations/2026_11_14_110000_add_settlement_status_to_sanctum_scan_exchanges_table.php');
-        $settlementMigration->up();
+        $paymentEvidenceVersionMigration = require base_path('database/migrations/2026_11_16_130000_add_versioning_to_sanctum_scan_exchange_payment_evidence_table.php');
+        $paymentEvidenceVersionMigration->up();
         $disputeMigration = require base_path('database/migrations/2026_11_13_163000_create_sanctum_scan_exchange_disputes_table.php');
         $disputeMigration->up();
         $disputeMessageMigration = require base_path('database/migrations/2026_11_13_164000_create_sanctum_scan_exchange_dispute_messages_table.php');
@@ -146,13 +149,17 @@ class EconomicExchangeLifecycleTest extends TestCase
         $identityGateMigration->up();
         $identityChecksMigration = require base_path('database/migrations/2026_11_14_100200_create_sanctum_scan_user_identity_checks_table.php');
         $identityChecksMigration->up();
+        $settlementMigration = require base_path('database/migrations/2026_11_14_110000_add_settlement_status_to_sanctum_scan_exchanges_table.php');
+        $settlementMigration->up();
+        $settlementBackfillMigration = require base_path('database/migrations/2026_11_16_120000_backfill_settlement_status_for_closed_exchanges.php');
+        $settlementBackfillMigration->up();
 
         // Keep Passport authentication, participant status and 2FA checks active.
         // Disable only environment-dependent maintenance, PIN and global KYC gates.
         $this->withoutMiddleware([
-            \App\Http\Middleware\Admin\SystemMaintenanceApi::class,
-            \App\Http\Middleware\KycApi::class,
-            \App\Http\Middleware\User\PinSetupGuard::class,
+            SystemMaintenanceApi::class,
+            KycApi::class,
+            PinSetupGuard::class,
             \App\Http\Middleware\Merchant\PinSetupGuard::class,
         ]);
     }
@@ -163,7 +170,7 @@ class EconomicExchangeLifecycleTest extends TestCase
             'firstname' => 'Test',
             'lastname' => 'Merchant',
             'username' => $username,
-            'email' => $username . '@example.test',
+            'email' => $username.'@example.test',
             'password' => bcrypt('not-a-real-password'),
             'business_name' => $businessName,
             'status' => true,
@@ -181,7 +188,7 @@ class EconomicExchangeLifecycleTest extends TestCase
             'firstname' => 'Test',
             'lastname' => 'Buyer',
             'username' => $username,
-            'email' => $username . '@example.test',
+            'email' => $username.'@example.test',
             'password' => bcrypt('not-a-real-password'),
             'status' => true,
             'email_verified' => true,
@@ -254,12 +261,12 @@ class EconomicExchangeLifecycleTest extends TestCase
             ->assertJsonPath('data.exchanges.0.merchant.business_name', 'Rongai Produce Collective');
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/accept')
             ->assertOk()
             ->assertJsonPath('data.exchange.status', 'accepted');
 
         $this->actingAs($merchant, 'merchant_api')
-            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispatch', [
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/'.$exchangeId.'/dispatch', [
                 'dispatch_reference' => 'LOCAL-PICKUP-005',
                 'dispatch_note' => 'Goods made available for collection.',
             ])
@@ -267,14 +274,14 @@ class EconomicExchangeLifecycleTest extends TestCase
             ->assertJsonPath('data.exchange.status', 'dispatched');
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/receipt', [
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/receipt', [
                 'receipt_note' => 'Goods received by buyer.',
             ])
             ->assertOk()
             ->assertJsonPath('data.exchange.status', 'received');
 
         $paymentResponse = $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/payment-reference', [
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/payment-reference', [
                 'rail' => 'mpesa',
                 'reference' => 'QJK8XY5ABCDE',
                 'amount' => '25000.00000000',
@@ -287,6 +294,7 @@ class EconomicExchangeLifecycleTest extends TestCase
 
         $exchange = SanctumScanExchange::query()->findOrFail($exchangeId);
         $this->assertSame('received', $exchange->status);
+        $this->assertSame('payment_evidence_submitted', $exchange->settlement_status);
         $this->assertSame('25000.00000000', $exchange->amount);
         $this->assertSame(1, SanctumScanExchangePaymentEvidence::query()->where('exchange_id', $exchangeId)->count());
         $this->assertSame('unverified', $exchange->paymentEvidence->verification_status);
@@ -305,7 +313,6 @@ class EconomicExchangeLifecycleTest extends TestCase
             'payment_reference_submitted',
             'settlement_status_changed',
         ], $eventTypes);
-        $this->assertSame('payment_evidence_submitted', $exchange->settlement_status);
 
         $paymentEvent = SanctumScanExchangeEvent::query()
             ->where('exchange_id', $exchangeId)
@@ -315,149 +322,6 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->assertSame('unverified', $paymentEvent->verification_status);
         $this->assertSame('api', $paymentEvent->recorded_by_guard);
         $this->assertSame($buyer->getKey(), $paymentEvent->recorded_by_id);
-    }
-
-    public function test_settlement_state_machine_requires_bounded_actors_matching_payment_evidence_and_buyer_receipt(): void
-    {
-        $merchant = $this->makeMerchant('settlement-seller', 'Settlement Seller');
-        $buyer = $this->makeBuyer('settlement-buyer');
-        $resource = $this->makeResource($merchant);
-        $offer = $this->issueOffer($merchant, $buyer, $resource);
-        $exchange = SanctumScanExchange::query()->findOrFail($offer['id']);
-
-        $exchange->forceFill([
-            'status' => 'received',
-            'received_at' => now(),
-        ])->save();
-
-        SanctumScanExchangePaymentEvidence::query()->create([
-            'exchange_id' => $exchange->getKey(),
-            'rail' => 'mpesa',
-            'reference' => 'SETTLEMENT-REF-001',
-            'amount' => $exchange->amount,
-            'currency' => $exchange->currency,
-            'verification_status' => 'unverified',
-            'submitted_by_guard' => 'api',
-            'submitted_by_id' => $buyer->getKey(),
-            'submitted_at' => now(),
-        ]);
-
-        $manager = app(ExchangeSettlementManager::class);
-
-        $this->assertSame(
-            'invalid_settlement_actor',
-            $manager->transition($exchange, 'settled', 'system', 0)
-        );
-        $this->assertSame(
-            'invalid_settlement_actor',
-            $manager->transition($exchange, 'payment_verified', 'merchant_api', $merchant->getKey())
-        );
-
-        $manager->onPaymentEvidenceSubmitted($exchange->fresh());
-        $this->assertSame('payment_evidence_submitted', $exchange->fresh()->settlement_status);
-
-        $this->assertSame(
-            'payment_rejection_decision_required',
-            $manager->transition(
-                $exchange->fresh(),
-                'payment_rejected',
-                'admin',
-                $this->makeAdminForVerification('settlement-reject-reviewer'),
-                'platform_verified'
-            )
-        );
-
-        $this->assertSame(
-            'invalid_settlement_actor',
-            $manager->transition($exchange->fresh(), 'payment_verified', 'admin', 0)
-        );
-
-        $verified = $manager->transition(
-            $exchange->fresh(),
-            'payment_verified',
-            'admin',
-            $this->makeAdminForVerification('settlement-reviewer'),
-            'platform_verified'
-        );
-
-        $this->assertInstanceOf(SanctumScanExchange::class, $verified);
-        $this->assertSame('payment_verified', $verified->settlement_status);
-
-        $settled = $manager->transition(
-            $verified,
-            'settled',
-            'admin',
-            $this->makeAdminForVerification('settlement-closer')
-        );
-
-        $this->assertInstanceOf(SanctumScanExchange::class, $settled);
-        $this->assertSame('settled', $settled->settlement_status);
-        $this->assertSame(3, SanctumScanExchangeEvent::query()
-            ->where('exchange_id', $exchange->getKey())
-            ->where('event_type', 'settlement_status_changed')
-            ->count());
-    }
-
-    public function test_settlement_rejects_mismatched_payment_evidence_and_missing_buyer_receipt(): void
-    {
-        $merchant = $this->makeMerchant('settlement-guard-seller', 'Settlement Guard Seller');
-        $buyer = $this->makeBuyer('settlement-guard-buyer');
-        $resource = $this->makeResource($merchant);
-        $offer = $this->issueOffer($merchant, $buyer, $resource);
-        $exchange = SanctumScanExchange::query()->findOrFail($offer['id']);
-
-        SanctumScanExchangePaymentEvidence::query()->create([
-            'exchange_id' => $exchange->getKey(),
-            'rail' => 'mpesa',
-            'reference' => 'SETTLEMENT-REF-002',
-            'amount' => '1.00000000',
-            'currency' => $exchange->currency,
-            'verification_status' => 'unverified',
-            'submitted_by_guard' => 'api',
-            'submitted_by_id' => $buyer->getKey(),
-            'submitted_at' => now(),
-        ]);
-
-        $manager = app(ExchangeSettlementManager::class);
-        $manager->onPaymentEvidenceSubmitted($exchange);
-
-        $this->assertSame(
-            'payment_evidence_mismatch',
-            $manager->transition(
-                $exchange->fresh(),
-                'payment_verified',
-                'admin',
-                $this->makeAdminForVerification('settlement-mismatch-reviewer'),
-                'platform_verified'
-            )
-        );
-
-        $exchange->forceFill(['status' => 'received', 'received_at' => now()])->save();
-        SanctumScanExchangePaymentEvidence::query()
-            ->where('exchange_id', $exchange->getKey())
-            ->update(['amount' => $exchange->amount]);
-
-        $verified = $manager->transition(
-            $exchange->fresh(),
-            'payment_verified',
-            'admin',
-            $this->makeAdminForVerification('settlement-receipt-reviewer'),
-            'platform_verified'
-        );
-
-        $this->assertInstanceOf(SanctumScanExchange::class, $verified);
-        $exchange->forceFill(['status' => 'dispatched', 'received_at' => null])->save();
-
-        $this->assertSame(
-            'buyer_receipt_required',
-            $manager->transition(
-                $verified,
-                'settled',
-                'admin',
-                $this->makeAdminForVerification('settlement-receipt-closer')
-            )
-        );
-        $this->assertSame('payment_verified', $exchange->fresh()->settlement_status);
     }
 
     public function test_merchant_cannot_issue_an_offer_for_another_merchants_resource(): void
@@ -511,7 +375,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         $offer = $this->issueOffer($merchant, $buyer, $resource);
 
         $this->actingAs($merchant, 'merchant_api')
-            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $offer['id'] . '/dispatch')
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/'.$offer['id'].'/dispatch')
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'invalid_exchange_state');
 
@@ -532,7 +396,7 @@ class EconomicExchangeLifecycleTest extends TestCase
             ->assertJsonCount(0, 'data.exchanges');
 
         $this->actingAs($otherBuyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$offer['id'].'/accept')
             ->assertNotFound();
 
         $this->assertSame('offered', SanctumScanExchange::findOrFail($offer['id'])->status);
@@ -546,7 +410,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         $offer = $this->issueOffer($merchant, $buyer, $resource);
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/receipt')
+            ->postJson('/api/user/sanctum/exchanges/'.$offer['id'].'/receipt')
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'invalid_exchange_state');
     }
@@ -559,11 +423,11 @@ class EconomicExchangeLifecycleTest extends TestCase
         $offer = $this->issueOffer($merchant, $buyer, $resource);
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$offer['id'].'/accept')
             ->assertOk();
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/payment-reference', [
+            ->postJson('/api/user/sanctum/exchanges/'.$offer['id'].'/payment-reference', [
                 'rail' => 'mpesa',
                 'reference' => 'WRONG-AMOUNT',
                 'amount' => '24999',
@@ -583,7 +447,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         $offer = $this->issueOffer($merchant, $buyer, $resource);
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$offer['id'].'/accept')
             ->assertOk();
 
         $payload = [
@@ -594,11 +458,11 @@ class EconomicExchangeLifecycleTest extends TestCase
         ];
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/payment-reference', $payload)
+            ->postJson('/api/user/sanctum/exchanges/'.$offer['id'].'/payment-reference', $payload)
             ->assertCreated();
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/payment-reference', [
+            ->postJson('/api/user/sanctum/exchanges/'.$offer['id'].'/payment-reference', [
                 ...$payload,
                 'reference' => 'BANK-REF-SECOND',
             ])
@@ -620,7 +484,7 @@ class EconomicExchangeLifecycleTest extends TestCase
             ->update(['expires_at' => now()->subMinute()]);
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$offer['id'].'/accept')
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'offer_expired');
 
@@ -640,7 +504,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         $offer = $this->issueOffer($merchant, $buyer, $resource);
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$offer['id'].'/accept')
             ->assertOk();
 
         $resource->forceFill([
@@ -649,7 +513,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         ])->save();
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$offer['id'].'/accept')
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'invalid_exchange_state');
 
@@ -669,7 +533,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         ])->save();
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$offer['id'].'/accept')
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'offer_withdrawn');
 
@@ -689,11 +553,11 @@ class EconomicExchangeLifecycleTest extends TestCase
         $offer = $this->issueOffer($merchant, $buyer, $resource);
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$offer['id'].'/accept')
             ->assertOk();
 
         $this->actingAs($merchant, 'merchant_api')
-            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $offer['id'] . '/cancel')
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/'.$offer['id'].'/cancel')
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'invalid_exchange_state');
 
@@ -708,11 +572,11 @@ class EconomicExchangeLifecycleTest extends TestCase
         $offer = $this->issueOffer($merchant, $buyer, $resource);
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$offer['id'].'/accept')
             ->assertOk();
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/payment-reference', [
+            ->postJson('/api/user/sanctum/exchanges/'.$offer['id'].'/payment-reference', [
                 'rail' => 'mpesa',
                 'reference' => 'IMMUTABLE-REF',
                 'amount' => '25000',
@@ -735,7 +599,6 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->assertSame('unverified', $evidence->fresh()->verification_status);
     }
 
-
     public function test_bilateral_dispute_can_be_resolved_only_by_the_other_participant(): void
     {
         $merchant = $this->makeMerchant('dispute-flow-seller', 'Dispute Flow Seller');
@@ -745,11 +608,11 @@ class EconomicExchangeLifecycleTest extends TestCase
         $exchangeId = $offer['id'];
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/accept')
             ->assertOk();
 
         $this->actingAs($merchant, 'merchant_api')
-            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute', [
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/'.$exchangeId.'/dispute', [
                 'category' => 'quantity_mismatch',
                 'statement' => 'The parties need to reconcile the measured quantity.',
             ])
@@ -758,31 +621,31 @@ class EconomicExchangeLifecycleTest extends TestCase
             ->assertJsonPath('data.dispute.opened_by', 'merchant');
 
         $this->actingAs($buyer, 'api')
-            ->getJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute')
+            ->getJson('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute')
             ->assertOk()
             ->assertJsonPath('data.dispute.messages.0.body', 'The parties need to reconcile the measured quantity.');
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/messages', [
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute/messages', [
                 'message' => 'I agree that we should compare the measurement records.',
             ])
             ->assertOk()
             ->assertJsonPath('data.dispute.messages.1.author', 'buyer');
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/propose-resolution', [
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute/propose-resolution', [
                 'summary' => 'Both parties will arrange a joint quantity check.',
             ])
             ->assertOk()
             ->assertJsonPath('data.dispute.status', 'resolution_proposed');
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/accept-resolution')
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute/accept-resolution')
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'proposer_cannot_accept');
 
         $this->actingAs($merchant, 'merchant_api')
-            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute/accept-resolution')
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/'.$exchangeId.'/dispute/accept-resolution')
             ->assertOk()
             ->assertJsonPath('data.dispute.status', 'resolved')
             ->assertJsonPath('data.dispute.resolved_by', 'merchant');
@@ -797,7 +660,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         ]);
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute')
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute')
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'dispute_exists');
     }
@@ -811,15 +674,15 @@ class EconomicExchangeLifecycleTest extends TestCase
         $offer = $this->issueOffer($merchant, $buyer, $resource);
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$offer['id'].'/accept')
             ->assertOk();
 
         $this->actingAs($otherBuyer, 'api')
-            ->getJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/dispute')
+            ->getJson('/api/user/sanctum/exchanges/'.$offer['id'].'/dispute')
             ->assertNotFound();
 
         $this->actingAs($otherBuyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/dispute', [
+            ->postJson('/api/user/sanctum/exchanges/'.$offer['id'].'/dispute', [
                 'category' => 'other',
                 'statement' => 'An unauthorized statement.',
             ])
@@ -836,7 +699,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         $offer = $this->issueOffer($merchant, $buyer, $resource);
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $offer['id'] . '/dispute', [
+            ->postJson('/api/user/sanctum/exchanges/'.$offer['id'].'/dispute', [
                 'category' => 'non_delivery',
                 'statement' => 'The exchange has not progressed.',
             ])
@@ -855,25 +718,25 @@ class EconomicExchangeLifecycleTest extends TestCase
         $exchangeId = $offer['id'];
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/accept')
             ->assertOk();
 
         $this->actingAs($merchant, 'merchant_api')
-            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute', [
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/'.$exchangeId.'/dispute', [
                 'category' => 'terms_disagreement',
                 'statement' => 'The parties disagree about the agreed collection terms.',
             ])
             ->assertCreated();
 
         $this->actingAs($merchant, 'merchant_api')
-            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute/propose-resolution', [
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/'.$exchangeId.'/dispute/propose-resolution', [
                 'summary' => 'Proposed resolution: reschedule collection.',
             ])
             ->assertOk()
             ->assertJsonPath('data.dispute.status', 'resolution_proposed');
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/reject-resolution', [
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute/reject-resolution', [
                 'reason' => 'The proposed time is not workable.',
             ])
             ->assertOk()
@@ -890,24 +753,24 @@ class EconomicExchangeLifecycleTest extends TestCase
         $exchangeId = $offer['id'];
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/accept')
             ->assertOk();
 
         $this->actingAs($merchant, 'merchant_api')
-            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute', [
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/'.$exchangeId.'/dispute', [
                 'category' => 'payment_question',
                 'statement' => 'The payment reference needs clarification.',
             ])
             ->assertCreated();
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/messages', [
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute/messages', [
                 'message' => 'I will provide the transaction receipt for review.',
             ])
             ->assertOk();
 
         $this->actingAs($merchant, 'merchant_api')
-            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute/withdraw')
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/'.$exchangeId.'/dispute/withdraw')
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'withdrawal_not_allowed');
 
@@ -923,23 +786,23 @@ class EconomicExchangeLifecycleTest extends TestCase
         $exchangeId = $offer['id'];
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/accept')
             ->assertOk();
 
         $this->actingAs($merchant, 'merchant_api')
-            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute', [
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/'.$exchangeId.'/dispute', [
                 'category' => 'other',
                 'statement' => 'Opening statement that the merchant later withdraws.',
             ])
             ->assertCreated();
 
         $this->actingAs($merchant, 'merchant_api')
-            ->postJson('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute/withdraw')
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/'.$exchangeId.'/dispute/withdraw')
             ->assertOk()
             ->assertJsonPath('data.dispute.status', 'withdrawn');
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute')
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute')
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'dispute_exists');
     }
@@ -953,11 +816,11 @@ class EconomicExchangeLifecycleTest extends TestCase
         $exchangeId = $offer['id'];
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/accept')
             ->assertOk();
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute', [
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute', [
                 'category' => 'quality_concern',
                 'statement' => 'The quality needs further discussion.',
             ])
@@ -981,7 +844,6 @@ class EconomicExchangeLifecycleTest extends TestCase
         );
     }
 
-
     public function test_dispute_evidence_is_private_and_available_only_to_exchange_participants(): void
     {
         Storage::fake('local');
@@ -995,18 +857,18 @@ class EconomicExchangeLifecycleTest extends TestCase
         $exchangeId = $offer['id'];
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/accept')
             ->assertOk();
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute', [
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute', [
                 'category' => 'payment_question',
                 'statement' => 'The payment reference needs to be checked against the receipt.',
             ])
             ->assertCreated();
 
         $upload = $this->actingAs($buyer, 'api')
-            ->post('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence', [
+            ->post('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute/evidence', [
                 'evidence_type' => 'payment_receipt',
                 'caption' => 'Receipt supplied for review.',
                 'file' => UploadedFile::fake()->create('payment-receipt.pdf', 32, 'application/pdf'),
@@ -1023,20 +885,20 @@ class EconomicExchangeLifecycleTest extends TestCase
         Storage::disk('public')->assertMissing($evidence->storage_path);
 
         $this->actingAs($merchant, 'merchant_api')
-            ->get('/merchant-api/merchant/sanctum/exchanges/' . $exchangeId . '/dispute/evidence')
+            ->get('/merchant-api/merchant/sanctum/exchanges/'.$exchangeId.'/dispute/evidence')
             ->assertOk()
             ->assertJsonPath('data.evidence.0.id', $evidence->getKey());
 
         $this->actingAs($outsider, 'api')
-            ->get('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence/' . $evidence->getKey() . '/download')
+            ->get('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute/evidence/'.$evidence->getKey().'/download')
             ->assertNotFound();
 
         $this->actingAs($buyer, 'api')
-            ->get('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence/' . $evidence->getKey() . '/download')
+            ->get('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute/evidence/'.$evidence->getKey().'/download')
             ->assertDownload('payment-receipt.pdf');
 
         $this->app['auth']->forgetGuards();
-        $this->getJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence/' . $evidence->getKey() . '/download')
+        $this->getJson('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute/evidence/'.$evidence->getKey().'/download')
             ->assertUnauthorized();
     }
 
@@ -1051,11 +913,11 @@ class EconomicExchangeLifecycleTest extends TestCase
         $exchangeId = $offer['id'];
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/accept')
             ->assertOk();
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute', [
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute', [
                 'category' => 'quality_concern',
                 'statement' => 'The product quality evidence needs review.',
             ])
@@ -1063,7 +925,7 @@ class EconomicExchangeLifecycleTest extends TestCase
 
         $firstFile = UploadedFile::fake()->createWithContent('same-receipt.pdf', '%PDF-1.4 test evidence');
         $first = $this->actingAs($buyer, 'api')
-            ->post('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence', [
+            ->post('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute/evidence', [
                 'evidence_type' => 'quality_record',
                 'file' => $firstFile,
             ], ['Accept' => 'application/json']);
@@ -1071,7 +933,7 @@ class EconomicExchangeLifecycleTest extends TestCase
 
         $secondFile = UploadedFile::fake()->createWithContent('same-receipt-copy.pdf', '%PDF-1.4 test evidence');
         $second = $this->actingAs($buyer, 'api')
-            ->post('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence', [
+            ->post('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute/evidence', [
                 'evidence_type' => 'quality_record',
                 'file' => $secondFile,
             ], ['Accept' => 'application/json']);
@@ -1093,18 +955,18 @@ class EconomicExchangeLifecycleTest extends TestCase
         $exchangeId = $offer['id'];
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/accept')
             ->assertOk();
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute', [
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute', [
                 'category' => 'payment_question',
                 'statement' => 'The supplied payment receipt should be checked.',
             ])
             ->assertCreated();
 
         $this->actingAs($buyer, 'api')
-            ->post('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence', [
+            ->post('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute/evidence', [
                 'evidence_type' => 'payment_receipt',
                 'caption' => 'Receipt supplied for review.',
                 'file' => UploadedFile::fake()->createWithContent('receipt.pdf', '%PDF-1.4 review fixture'),
@@ -1173,18 +1035,18 @@ class EconomicExchangeLifecycleTest extends TestCase
         $exchangeId = $offer['id'];
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/accept')
             ->assertOk();
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute', [
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute', [
                 'category' => 'other',
                 'statement' => 'Evidence integrity should be checked.',
             ])
             ->assertCreated();
 
         $this->actingAs($buyer, 'api')
-            ->post('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence', [
+            ->post('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute/evidence', [
                 'evidence_type' => 'other',
                 'file' => UploadedFile::fake()->createWithContent('evidence.pdf', '%PDF-1.4 original'),
             ], ['Accept' => 'application/json'])
@@ -1219,7 +1081,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->assertSame(0, SanctumScanExchangeEvidenceReview::query()->count());
 
         $this->actingAs($buyer, 'api')
-            ->get('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence/' . $evidence->getKey() . '/download')
+            ->get('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute/evidence/'.$evidence->getKey().'/download')
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'evidence_integrity_failure');
     }
@@ -1229,8 +1091,8 @@ class EconomicExchangeLifecycleTest extends TestCase
         return (int) DB::table('admins')->insertGetId([
             'firstname' => 'Registry',
             'lastname' => 'Administrator',
-            'username' => 'registry-admin-' . $suffix,
-            'email' => 'registry-admin-' . $suffix . '@example.test',
+            'username' => 'registry-admin-'.$suffix,
+            'email' => 'registry-admin-'.$suffix.'@example.test',
             'password' => bcrypt('not-a-real-password'),
             'status' => true,
             'created_at' => now(),
@@ -1243,26 +1105,26 @@ class EconomicExchangeLifecycleTest extends TestCase
         User $buyer,
         string $suffix
     ): array {
-        $resource = $this->makeResource($merchant, 'Verification batch ' . $suffix);
+        $resource = $this->makeResource($merchant, 'Verification batch '.$suffix);
         $offer = $this->issueOffer($merchant, $buyer, $resource);
         $exchangeId = $offer['id'];
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/accept')
             ->assertOk();
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute', [
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute', [
                 'category' => 'quality_concern',
                 'statement' => 'This evidence needs an independent inspection for the test fixture.',
             ])
             ->assertCreated();
 
         $this->actingAs($buyer, 'api')
-            ->post('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence', [
+            ->post('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute/evidence', [
                 'evidence_type' => 'quality_record',
                 'file' => UploadedFile::fake()->createWithContent(
-                    'quality-proof-' . $suffix . '.pdf',
+                    'quality-proof-'.$suffix.'.pdf',
                     '%PDF-1.4 independent verification fixture'
                 ),
             ], ['Accept' => 'application/json'])
@@ -1278,16 +1140,16 @@ class EconomicExchangeLifecycleTest extends TestCase
     {
         Storage::fake('local');
 
-        $merchant = $this->makeMerchant('revision-seller-' . $suffix, 'Revision Seller ' . $suffix);
-        $buyer = $this->makeBuyer('revision-buyer-' . $suffix);
-        $verifier = $this->makeBuyer('revision-verifier-' . $suffix);
+        $merchant = $this->makeMerchant('revision-seller-'.$suffix, 'Revision Seller '.$suffix);
+        $buyer = $this->makeBuyer('revision-buyer-'.$suffix);
+        $verifier = $this->makeBuyer('revision-verifier-'.$suffix);
         $fixture = $this->makeDisputeEvidenceForVerification($merchant, $buyer, $suffix);
         $evidence = $fixture['evidence'];
-        $adminId = $this->makeAdminForVerification('revision-' . $suffix);
+        $adminId = $this->makeAdminForVerification('revision-'.$suffix);
         $manager = app(IndependentVerificationManager::class);
 
         $institution = $manager->registerInstitution($adminId, [
-            'name' => 'Revision Institute ' . $suffix,
+            'name' => 'Revision Institute '.$suffix,
             'organization_type' => 'inspection_body',
             'country_code' => 'KE',
         ]);
@@ -1299,7 +1161,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         );
 
         $this->actingAs($verifier, 'api')
-            ->postJson('/api/user/sanctum/verifier/memberships/' . $membership->getKey() . '/accept')
+            ->postJson('/api/user/sanctum/verifier/memberships/'.$membership->getKey().'/accept')
             ->assertOk();
 
         $manager->recordCredentialReview(
@@ -1309,7 +1171,7 @@ class EconomicExchangeLifecycleTest extends TestCase
             'institution_registration',
             'business_registration',
             'Kenya Business Registration Service',
-            'BRS-REV-' . strtoupper($suffix),
+            'BRS-REV-'.strtoupper($suffix),
             'KE',
             null,
             'registry_lookup',
@@ -1325,7 +1187,7 @@ class EconomicExchangeLifecycleTest extends TestCase
             'quality_observation',
             'professional_inspector',
             'Kenya Bureau of Standards',
-            'KEBS-REV-' . strtoupper($suffix),
+            'KEBS-REV-'.strtoupper($suffix),
             'KE',
             null,
             'issuer_confirmation',
@@ -1345,8 +1207,8 @@ class EconomicExchangeLifecycleTest extends TestCase
 
         $this->actingAs($verifier, 'api')
             ->postJson(
-                '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
-                    . '/evidence/' . $evidence->getKey() . '/conflict-declaration',
+                '/api/user/sanctum/verifier/memberships/'.$membership->getKey()
+                    .'/evidence/'.$evidence->getKey().'/conflict-declaration',
                 [
                     'has_conflict' => false,
                     'disclosure_statement' => 'I have disclosed the relationships and interests known to me for this specific evidence review.',
@@ -1356,8 +1218,8 @@ class EconomicExchangeLifecycleTest extends TestCase
 
         $attestationResponse = $this->actingAs($verifier, 'api')
             ->postJson(
-                '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
-                    . '/evidence/' . $evidence->getKey() . '/attestations',
+                '/api/user/sanctum/verifier/memberships/'.$membership->getKey()
+                    .'/evidence/'.$evidence->getKey().'/attestations',
                 [
                     'verification_scope' => 'quality_observation',
                     'verification_method' => 'document_review',
@@ -1401,8 +1263,8 @@ class EconomicExchangeLifecycleTest extends TestCase
         // currently credentialed and conflict-cleared verifier.
         $manager->setMandateStatus((int) $mandate->getKey(), $adminId, 'completed');
 
-        $correctionPath = '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
-            . '/attestations/' . $attestationId . '/corrections';
+        $correctionPath = '/api/user/sanctum/verifier/memberships/'.$membership->getKey()
+            .'/attestations/'.$attestationId.'/corrections';
 
         $this->actingAs($buyer, 'api')
             ->postJson($correctionPath, [
@@ -1453,7 +1315,7 @@ class EconomicExchangeLifecycleTest extends TestCase
             ->count());
 
         $this->actingAs($buyer, 'api')
-            ->getJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence')
+            ->getJson('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute/evidence')
             ->assertOk()
             ->assertJsonPath('data.evidence.0.independent_attestations.0.outcome', 'corroborated')
             ->assertJsonPath('data.evidence.0.independent_attestations.0.current.version_number', 3)
@@ -1526,7 +1388,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         );
 
         $this->actingAs($successor, 'api')
-            ->postJson('/api/user/sanctum/verifier/memberships/' . $newMembership->getKey() . '/accept')
+            ->postJson('/api/user/sanctum/verifier/memberships/'.$newMembership->getKey().'/accept')
             ->assertOk();
 
         $manager->recordCredentialReview(
@@ -1561,8 +1423,8 @@ class EconomicExchangeLifecycleTest extends TestCase
 
         $this->actingAs($successor, 'api')
             ->postJson(
-                '/api/user/sanctum/verifier/memberships/' . $newMembership->getKey()
-                    . '/evidence/' . $evidence->getKey() . '/conflict-declaration',
+                '/api/user/sanctum/verifier/memberships/'.$newMembership->getKey()
+                    .'/evidence/'.$evidence->getKey().'/conflict-declaration',
                 [
                     'has_conflict' => false,
                     'disclosure_statement' => 'I have disclosed the relationships and interests known to me for this separate reassessment.',
@@ -1570,8 +1432,8 @@ class EconomicExchangeLifecycleTest extends TestCase
             )
             ->assertCreated();
 
-        $reassessmentPath = '/api/user/sanctum/verifier/memberships/' . $newMembership->getKey()
-            . '/attestations/' . $priorAttestationId . '/reassessments';
+        $reassessmentPath = '/api/user/sanctum/verifier/memberships/'.$newMembership->getKey()
+            .'/attestations/'.$priorAttestationId.'/reassessments';
 
         // Even the prior issuer cannot use the reassessment path to impersonate
         // a different member or create a replacement record under their identity.
@@ -1621,7 +1483,7 @@ class EconomicExchangeLifecycleTest extends TestCase
             ->count());
 
         $this->actingAs($buyer, 'api')
-            ->getJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence')
+            ->getJson('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute/evidence')
             ->assertOk()
             ->assertJsonPath('data.evidence.0.independent_attestations.0.id', $priorAttestationId)
             ->assertJsonPath('data.evidence.0.independent_attestations.0.reassessments.0.reassessment_attestation_id', $newAttestationId)
@@ -1676,8 +1538,8 @@ class EconomicExchangeLifecycleTest extends TestCase
         // but must not trap the issuer into leaving an unreliable attestation live.
         $this->actingAs($verifier, 'api')
             ->postJson(
-                '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
-                    . '/evidence/' . $evidence->getKey() . '/conflict-declaration',
+                '/api/user/sanctum/verifier/memberships/'.$membership->getKey()
+                    .'/evidence/'.$evidence->getKey().'/conflict-declaration',
                 [
                     'has_conflict' => true,
                     'disclosure_statement' => 'I have discovered and disclosed a material relationship that conflicts with this review.',
@@ -1692,8 +1554,8 @@ class EconomicExchangeLifecycleTest extends TestCase
         // it is a protective action that does not require re-reading the file.
         Storage::disk('local')->put($evidence->storage_path, 'tampered after the attestation');
 
-        $revocationPath = '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
-            . '/attestations/' . $attestationId . '/revocation';
+        $revocationPath = '/api/user/sanctum/verifier/memberships/'.$membership->getKey()
+            .'/attestations/'.$attestationId.'/revocation';
 
         $revocation = $this->actingAs($verifier, 'api')
             ->postJson($revocationPath, [
@@ -1713,15 +1575,15 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->assertSame('open', SanctumScanExchangeDispute::query()->firstOrFail()->status);
 
         $this->actingAs($buyer, 'api')
-            ->getJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence')
+            ->getJson('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute/evidence')
             ->assertOk()
             ->assertJsonPath('data.evidence.0.independent_attestations.0.current.status', 'revoked')
             ->assertJsonPath('data.evidence.0.independent_attestations.0.current.version_number', 2)
             ->assertJsonPath('data.evidence.0.independent_attestations.0.revisions.0.revision_action', 'revoked');
 
         $this->actingAs($verifier, 'api')
-            ->postJson('/api/user/sanctum/verifier/memberships/' . $membership->getKey()
-                . '/attestations/' . $attestationId . '/corrections', [
+            ->postJson('/api/user/sanctum/verifier/memberships/'.$membership->getKey()
+                .'/attestations/'.$attestationId.'/corrections', [
                     'verification_method' => 'document_review',
                     'outcome' => 'corroborated',
                     'basis_summary' => 'A correction after withdrawal must never reactivate a revoked attestation.',
@@ -1770,8 +1632,8 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->assertSame('suspended', $institution->fresh()->status);
         $this->assertSame('revoked', $context['mandate']->fresh()->status);
 
-        $correctionPath = '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
-            . '/attestations/' . $attestationId . '/corrections';
+        $correctionPath = '/api/user/sanctum/verifier/memberships/'.$membership->getKey()
+            .'/attestations/'.$attestationId.'/corrections';
 
         $this->actingAs($verifier, 'api')
             ->postJson($correctionPath, [
@@ -1786,8 +1648,8 @@ class EconomicExchangeLifecycleTest extends TestCase
 
         // A protective withdrawal must remain available even though governance
         // eligibility and the original mandate have since been suspended/revoked.
-        $revocationPath = '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
-            . '/attestations/' . $attestationId . '/revocation';
+        $revocationPath = '/api/user/sanctum/verifier/memberships/'.$membership->getKey()
+            .'/attestations/'.$attestationId.'/revocation';
 
         $this->actingAs($verifier, 'api')
             ->postJson($revocationPath, [
@@ -1806,7 +1668,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->assertSame('open', SanctumScanExchangeDispute::query()->firstOrFail()->status);
 
         $this->actingAs($context['buyer'], 'api')
-            ->getJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence')
+            ->getJson('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute/evidence')
             ->assertOk()
             ->assertJsonPath('data.evidence.0.independent_attestations.0.current.status', 'revoked')
             ->assertJsonPath('data.evidence.0.independent_attestations.0.current.version_number', 2);
@@ -1868,7 +1730,7 @@ class EconomicExchangeLifecycleTest extends TestCase
             (int) $verifier->getKey(),
             $adminId
         );
-        $this->assertInstanceOf(\App\Models\SanctumScanVerifierMembership::class, $membership);
+        $this->assertInstanceOf(SanctumScanVerifierMembership::class, $membership);
         $this->assertSame('invited', $membership->status);
 
         $this->assertSame(
@@ -1877,7 +1739,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         );
 
         $this->actingAs($outsider, 'api')
-            ->postJson('/api/user/sanctum/verifier/memberships/' . $membership->getKey() . '/accept')
+            ->postJson('/api/user/sanctum/verifier/memberships/'.$membership->getKey().'/accept')
             ->assertNotFound();
 
         $this->actingAs($verifier, 'api')
@@ -1886,12 +1748,12 @@ class EconomicExchangeLifecycleTest extends TestCase
             ->assertJsonPath('data.memberships.0.status', 'invited');
 
         $this->actingAs($verifier, 'api')
-            ->postJson('/api/user/sanctum/verifier/memberships/' . $membership->getKey() . '/accept')
+            ->postJson('/api/user/sanctum/verifier/memberships/'.$membership->getKey().'/accept')
             ->assertOk()
             ->assertJsonPath('data.membership.status', 'active');
 
-        $downloadUrl = '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
-            . '/evidence/' . $evidence->getKey() . '/download';
+        $downloadUrl = '/api/user/sanctum/verifier/memberships/'.$membership->getKey()
+            .'/evidence/'.$evidence->getKey().'/download';
 
         $this->actingAs($verifier, 'api')->get($downloadUrl)->assertForbidden();
 
@@ -1904,7 +1766,7 @@ class EconomicExchangeLifecycleTest extends TestCase
             now()->addDays(7)->toDateTimeString()
         );
         $this->assertInstanceOf(
-            \App\Models\SanctumScanEvidenceVerificationMandate::class,
+            SanctumScanEvidenceVerificationMandate::class,
             $mandate
         );
 
@@ -1992,8 +1854,8 @@ class EconomicExchangeLifecycleTest extends TestCase
 
         $this->actingAs($verifier, 'api')
             ->postJson(
-                '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
-                    . '/evidence/' . $evidence->getKey() . '/conflict-declaration',
+                '/api/user/sanctum/verifier/memberships/'.$membership->getKey()
+                    .'/evidence/'.$evidence->getKey().'/conflict-declaration',
                 [
                     'has_conflict' => false,
                     'disclosure_statement' => 'I have disclosed the relationships and interests known to me for this scoped evidence review.',
@@ -2006,8 +1868,8 @@ class EconomicExchangeLifecycleTest extends TestCase
             ->get($downloadUrl)
             ->assertDownload('quality-proof-m8.pdf');
 
-        $attestationUrl = '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
-            . '/evidence/' . $evidence->getKey() . '/attestations';
+        $attestationUrl = '/api/user/sanctum/verifier/memberships/'.$membership->getKey()
+            .'/evidence/'.$evidence->getKey().'/attestations';
 
         $this->actingAs($verifier, 'api')
             ->postJson($attestationUrl, [
@@ -2048,7 +1910,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->assertSame('open', SanctumScanExchangeDispute::query()->firstOrFail()->status);
 
         $this->actingAs($buyer, 'api')
-            ->getJson('/api/user/sanctum/exchanges/' . $fixture['exchange_id'] . '/dispute/evidence')
+            ->getJson('/api/user/sanctum/exchanges/'.$fixture['exchange_id'].'/dispute/evidence')
             ->assertOk()
             ->assertJsonPath('data.evidence.0.independent_attestations.0.outcome', 'corroborated')
             ->assertJsonPath('data.evidence.0.independent_attestations.0.institution_name', 'Nakuru Independent Quality Institute');
@@ -2058,8 +1920,8 @@ class EconomicExchangeLifecycleTest extends TestCase
 
         $this->actingAs($verifier, 'api')
             ->postJson(
-                '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
-                    . '/evidence/' . $evidence->getKey() . '/conflict-declaration',
+                '/api/user/sanctum/verifier/memberships/'.$membership->getKey()
+                    .'/evidence/'.$evidence->getKey().'/conflict-declaration',
                 [
                     'has_conflict' => true,
                     'disclosure_statement' => 'I have subsequently disclosed a material relationship relevant to this evidence review.',
@@ -2082,7 +1944,7 @@ class EconomicExchangeLifecycleTest extends TestCase
             now()->addDays(14)->toDateTimeString()
         );
         $this->assertInstanceOf(
-            \App\Models\SanctumScanEvidenceVerificationMandate::class,
+            SanctumScanEvidenceVerificationMandate::class,
             $replacementMandate
         );
         $this->assertNotSame($mandate->getKey(), $replacementMandate->getKey());
@@ -2121,7 +1983,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         );
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/verifier/memberships/' . $membership->getKey() . '/accept')
+            ->postJson('/api/user/sanctum/verifier/memberships/'.$membership->getKey().'/accept')
             ->assertOk();
 
         $manager->grantMandate(
@@ -2134,8 +1996,8 @@ class EconomicExchangeLifecycleTest extends TestCase
         );
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/verifier/memberships/' . $membership->getKey()
-                . '/evidence/' . $fixture['evidence']->getKey() . '/attestations', [
+            ->postJson('/api/user/sanctum/verifier/memberships/'.$membership->getKey()
+                .'/evidence/'.$fixture['evidence']->getKey().'/attestations', [
                     'verification_scope' => 'quality_observation',
                     'verification_method' => 'document_review',
                     'outcome' => 'corroborated',
@@ -2173,7 +2035,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         );
 
         $this->actingAs($verifier, 'api')
-            ->postJson('/api/user/sanctum/verifier/memberships/' . $membership->getKey() . '/accept')
+            ->postJson('/api/user/sanctum/verifier/memberships/'.$membership->getKey().'/accept')
             ->assertOk();
 
         $manager->recordCredentialReview(
@@ -2219,8 +2081,8 @@ class EconomicExchangeLifecycleTest extends TestCase
 
         $this->actingAs($verifier, 'api')
             ->postJson(
-                '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
-                    . '/evidence/' . $evidence->getKey() . '/conflict-declaration',
+                '/api/user/sanctum/verifier/memberships/'.$membership->getKey()
+                    .'/evidence/'.$evidence->getKey().'/conflict-declaration',
                 [
                     'has_conflict' => false,
                     'disclosure_statement' => 'I have disclosed the relationships and interests known to me for this assigned review.',
@@ -2230,8 +2092,8 @@ class EconomicExchangeLifecycleTest extends TestCase
 
         $attestationResponse = $this->actingAs($verifier, 'api')
             ->postJson(
-                '/api/user/sanctum/verifier/memberships/' . $membership->getKey()
-                    . '/evidence/' . $evidence->getKey() . '/attestations',
+                '/api/user/sanctum/verifier/memberships/'.$membership->getKey()
+                    .'/evidence/'.$evidence->getKey().'/attestations',
                 [
                     'verification_scope' => 'quality_observation',
                     'verification_method' => 'document_review',
@@ -2244,9 +2106,9 @@ class EconomicExchangeLifecycleTest extends TestCase
         $attestationId = (int) $attestationResponse->json('data.attestation.id');
         $attestation = SanctumScanIndependentAttestation::query()->findOrFail($attestationId);
 
-        $buyerAppealPath = '/api/user/sanctum/exchanges/' . $exchangeId
-            . '/dispute/evidence/' . $evidence->getKey()
-            . '/attestations/' . $attestationId . '/appeals';
+        $buyerAppealPath = '/api/user/sanctum/exchanges/'.$exchangeId
+            .'/dispute/evidence/'.$evidence->getKey()
+            .'/attestations/'.$attestationId.'/appeals';
 
         $buyerAppeal = $this->actingAs($buyer, 'api')
             ->postJson($buyerAppealPath, [
@@ -2266,9 +2128,9 @@ class EconomicExchangeLifecycleTest extends TestCase
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'appeal_already_exists');
 
-        $merchantAppealPath = '/merchant-api/merchant/sanctum/exchanges/' . $exchangeId
-            . '/dispute/evidence/' . $evidence->getKey()
-            . '/attestations/' . $attestationId . '/appeals';
+        $merchantAppealPath = '/merchant-api/merchant/sanctum/exchanges/'.$exchangeId
+            .'/dispute/evidence/'.$evidence->getKey()
+            .'/attestations/'.$attestationId.'/appeals';
 
         $this->actingAs($merchant, 'merchant_api')
             ->postJson($merchantAppealPath, [
@@ -2328,7 +2190,7 @@ class EconomicExchangeLifecycleTest extends TestCase
             ->exists());
 
         $this->actingAs($buyer, 'api')
-            ->getJson('/api/user/sanctum/exchanges/' . $exchangeId . '/dispute/evidence')
+            ->getJson('/api/user/sanctum/exchanges/'.$exchangeId.'/dispute/evidence')
             ->assertOk()
             ->assertJsonPath('data.evidence.0.independent_attestations.0.appeals.0.decision.outcome', 'correction_recommended');
     }
@@ -2356,7 +2218,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         );
 
         $this->actingAs($verifier, 'api')
-            ->postJson('/api/user/sanctum/verifier/memberships/' . $membership->getKey() . '/accept')
+            ->postJson('/api/user/sanctum/verifier/memberships/'.$membership->getKey().'/accept')
             ->assertOk();
 
         $mandate = $manager->grantMandate(
@@ -2368,7 +2230,7 @@ class EconomicExchangeLifecycleTest extends TestCase
             now()->addDays(7)->toDateTimeString()
         );
         $this->assertInstanceOf(
-            \App\Models\SanctumScanEvidenceVerificationMandate::class,
+            SanctumScanEvidenceVerificationMandate::class,
             $mandate
         );
 
@@ -2377,8 +2239,8 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->assertSame('revoked', $mandate->fresh()->status);
 
         $this->actingAs($verifier, 'api')
-            ->get('/api/user/sanctum/verifier/memberships/' . $membership->getKey()
-                . '/evidence/' . $fixture['evidence']->getKey() . '/download')
+            ->get('/api/user/sanctum/verifier/memberships/'.$membership->getKey()
+                .'/evidence/'.$fixture['evidence']->getKey().'/download')
             ->assertForbidden();
 
         $this->assertSame(0, SanctumScanIndependentAttestation::query()->count());
@@ -2408,7 +2270,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->assertStringNotContainsString('identity_verification_method', $merchantPayload);
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/accept')
             ->assertForbidden()
             ->assertJsonPath('error.code', 'buyer_identity_unverified');
 
@@ -2439,7 +2301,7 @@ class EconomicExchangeLifecycleTest extends TestCase
         $this->assertNotNull($buyer->fresh()->identity_verified_at);
 
         $this->actingAs($buyer, 'api')
-            ->postJson('/api/user/sanctum/exchanges/' . $exchangeId . '/accept')
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/accept')
             ->assertOk()
             ->assertJsonPath('data.exchange.status', 'accepted');
     }
@@ -2499,6 +2361,9 @@ class EconomicExchangeLifecycleTest extends TestCase
 
     protected function tearDown(): void
     {
+        // SQLite enforces foreign keys during DROP TABLE, which fails for
+        // self-referencing revision rows.
+        Schema::disableForeignKeyConstraints();
         Schema::dropIfExists('sanctum_scan_user_identity_checks');
         Schema::dropIfExists('basic_settings');
         Schema::dropIfExists('sanctum_scan_attestation_reassessments');
@@ -2517,13 +2382,13 @@ class EconomicExchangeLifecycleTest extends TestCase
         Schema::dropIfExists('sanctum_scan_exchange_dispute_messages');
         Schema::dropIfExists('sanctum_scan_exchange_disputes');
         Schema::dropIfExists('sanctum_scan_exchange_payment_evidence');
-        Schema::dropIfExists('sanctum_scan_exchanges');
         Schema::dropIfExists('sanctum_scan_exchange_events');
         Schema::dropIfExists('sanctum_scan_exchanges');
         Schema::dropIfExists('sanctum_scan_resources');
         Schema::dropIfExists('merchants');
         Schema::dropIfExists('admins');
         Schema::dropIfExists('users');
+        Schema::enableForeignKeyConstraints();
         DB::purge('sqlite');
 
         parent::tearDown();

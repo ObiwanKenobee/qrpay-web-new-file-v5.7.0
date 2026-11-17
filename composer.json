@@ -6,7 +6,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
-        "authorizenet/authorizenet": "2.0.3",
+        "authorizenet/authorizenet": "~2.0.3",
         "buglinjo/laravel-webp": "^3.2",
         "flutterwavedev/flutterwave-v3": "^1.0",
         "guzzlehttp/guzzle": "^7.2",
@@ -80,6 +80,9 @@
         ],
         "post-create-project-cmd": [
             "@php artisan key:generate --ansi"
+        ],
+        "check": [
+            "bash tools/verify.sh"
         ]
     },
     "extra": {

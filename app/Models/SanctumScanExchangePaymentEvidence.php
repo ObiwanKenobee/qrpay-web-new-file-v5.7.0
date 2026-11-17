@@ -23,6 +23,8 @@ class SanctumScanExchangePaymentEvidence extends Model
 
     protected $casts = [
         'exchange_id' => 'integer',
+        'version' => 'integer',
+        'supersedes_id' => 'integer',
         'amount' => 'decimal:8',
         'submitted_by_id' => 'integer',
         'submitted_at' => 'immutable_datetime',

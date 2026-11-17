@@ -5,6 +5,8 @@
 **Branch examined:** `feature/qrpay-update` at `4ddb392` (18 commits ahead of `main`, 0 behind)  
 **Scope:** Read-only investigation. No functional code was changed.
 
+> **Update 2026-11-16 (QODOR-002, M017–M019):** the boot blocker is repaired. `php artisan --version` reports 12.72.0 and `composer check` reports 94 tests, 1,017 assertions, 1 skipped (the MySQL-only concurrency test). The M016 settlement slice is implemented and covered by the matrices and suites listed in §9.6; the ADR 0016 gates and their CI workflow are wired; the admin operator middleware stack is verified by `AdminOperatorMiddlewareTest`; payment evidence is append-only and versioned, so rejection can be reopened by a buyer's new evidence (ADR 0018). Statements below marked as baseline findings remain historical evidence from the examined revision.
+
 ## Evidence conventions
 
 - **Verified** — read directly from the repository or produced by an executed command in this session.
@@ -34,9 +36,9 @@ The architecture is best described as a **modular monolith with a shared MySQL d
 
 Other principal architectural issues are a verification gap rather than a domain-design failure:
 
-- CI does not run on `feature/*` pushes and executes only one of four Sanctum Scan test files.
+- CI originally ran only on `sanctum-scan/**` pushes and `main` PRs, executing one of four Sanctum Scan test files. As of 2026-11-16 it runs on every push and PR with the full suite, deterministic gates, and a MySQL job (M017); the MySQL job is wired but has not executed yet.
 - Tests use hand-built SQLite schemas and bypass production middleware, so they cannot validate migrations, MySQL behaviour, or concurrency.
-- The settlement state machine exists as an **orphaned service and migration** with no caller and no tests.
+- The settlement state machine **was** an orphaned service and migration at the examined revision. As of 2026-11-16 it is wired, tested, and documented in §9.6.
 - Documentation and milestone status have drifted from code (M012–M014 absent; ADR 0014 missing; ADR 0012 and ADR 0015 conflict).
 - Legacy money paths contain unauthenticated or weakly authenticated webhooks, non-locking balance updates, and nested transactions.
 
@@ -80,15 +82,15 @@ Gateway constants are defined in [`app/Constants/PaymentGatewayConst.php`](app/C
 
 | Layer | Technology | Verified version / constraint |
 |---|---|---|
-| Language | PHP | `^8.2` in `composer.json`; CI uses 8.3; local session used 8.4.13 |
+| Language | PHP | `^8.2` in `composer.json`; CI uses 8.2; local session used 8.4.13 |
 | Framework | Laravel | locked `v12.72.0` |
 | API auth | Laravel Passport | locked `v13.11.0` |
 | Token package | Laravel Sanctum | locked `v4.4.0`; installed but unused for route protection |
 | Admin 2FA | `pragmarx/google2fa` | present |
 | Tests | PHPUnit | locked `11.5.57`; local vendor `11.5.58` |
-| Code style | Laravel Pint | locked `1.30.4`; no CI step |
-| Frontend | Vite 3, Bootstrap 5, Sass, Axios | `package.json`; no lockfile present |
-| Database | MySQL (production template) | `DB_CONNECTION=mysql` in `.env.example`; no MySQL CI job |
+| Code style | Laravel Pint | locked `1.30.4`; CI gate on changed files |
+| Frontend | Vite 3, Bootstrap 5, Sass, Axios | `package.json`; no lockfile present, no build gate |
+| Database | MySQL (production template) | `DB_CONNECTION=mysql` in `.env.example`; MySQL CI job wired (unexecuted) |
 | Test database | SQLite in-memory | tests override config and build schemas manually |
 | Cache/session/queue | File / file / database | `.env.example`; scheduler runs queue worker every five minutes |
 | Broadcasting | Pusher | `BROADCAST_DRIVER=pusher` |
@@ -307,8 +309,8 @@ There are no database `CHECK` constraints for status columns. State validity is 
 ### Environments
 
 - Production template: MySQL, file cache/session, database queue.
-- CI/tests: SQLite in-memory, array cache, sync queue, array session.
-- No MySQL CI job or migration smoke test exists. This is a material gap for a financial application.
+- CI/tests: SQLite in-memory for the gate job; MySQL 8 service for the migration and concurrency job.
+- The MySQL job is wired but unexecuted; until it runs, MySQL migration compatibility is unverified.
 
 ---
 
@@ -375,17 +377,18 @@ offered -> accepted -> dispatched -> received
 - Gate disabled by default; when enabled, acceptance locks settings then the buyer row, serialising against reviews.
 - Merchant responses never expose identity-review state.
 
-### 9.6 Settlement (incomplete)
+### 9.6 Settlement (implemented, records truth only)
 
-A schema migration and `ExchangeSettlementManager` exist, but:
+Settlement is a protocol record of what participants claim and what an administrator has verified. It never moves funds and never reads or writes legacy wallet or transaction tables.
 
-- No controller, route, service caller, or model cast references settlement status.
-- `onPaymentEvidenceSubmitted()` is never called from payment-evidence submission.
-- `cancel()` cannot succeed because `cancelled` is not in the allowed transitions for `awaiting_payment`, and its `void` signature discards the error.
-- `transition()` bypasses validation whenever `actorGuard === 'system'`.
-- No settlement test exists.
+- [`SettlementStateMachine`](app/Services/SanctumScan/SettlementStateMachine.php) is the single transition table. Only `admin` may verify, reject, or settle; `system` is not a superuser.
+- [`ExchangeSettlementManager`](app/Services/SanctumScan/ExchangeSettlementManager.php) applies transitions inside a locked transaction and appends exactly one `settlement_status_changed` event per change. Closed-exchange paths reuse it inside their existing locked transaction.
+- Buyer payment-reference submission writes the unverified evidence row, the evidence event, and the `awaiting_payment -> payment_evidence_submitted` transition in one transaction ([`SanctumScanExchangeController.php`](app/Http/Controllers/Api/User/SanctumScanExchangeController.php)).
+- Administrators inspect and advance settlement through [`SanctumScanExchangeSettlementController.php`](app/Http/Controllers/Admin/SanctumScanExchangeSettlementController.php); errors are typed (`invalid_settlement_transition`, `already_in_state`, `stale_expected_status`).
+- Buyer and merchant projections include `settlement_status` and `settlement_status_updated_at`; public scan payloads never expose it.
+- [`2026_11_16_120000_backfill_settlement_status_for_closed_exchanges.php`](database/migrations/2026_11_16_120000_backfill_settlement_status_for_closed_exchanges.php) reconciles exchanges closed before settlement tracking existed. It is reversible and idempotent.
 
-This is **schema-plus-orphan-service**, not an implemented capability.
+`settled` is an administrative record, not proof that funds were received or that a payment provider confirmed a transfer.
 
 ---
 
@@ -416,8 +419,8 @@ Architecture-level failure points, in priority order:
 6. **Installer reset endpoint** remains reachable post-install and rewrites the environment ([`resources/installer/src/routes/web.php:38`](resources/installer/src/routes/web.php:38)).
 7. **Legacy wallet concurrency and nested transactions** (double-spend/partial settlement hypotheses; see risk register).
 8. **Per-request settings queries and null dereferences** (`SystemMaintenance` assumes a row exists; [`app/Http/Middleware/Admin/SystemMaintenance.php:21`](app/Http/Middleware/Admin/SystemMaintenance.php:21)).
-9. **Test/production divergence** (SQLite hand-built schemas, middleware bypass, no MySQL CI).
-10. **CI not triggered on the active feature branch** and executing only one test file.
+9. **Test/production divergence** (SQLite hand-built schemas, middleware bypass, MySQL job unexecuted).
+10. **CI gates are wired but have not executed on GitHub**, and branch protection is not confirmed.
 
 ---
 
@@ -487,11 +490,13 @@ This fits the existing architecture because it adds no runtime service and no ne
 
 ### Verified
 
-- HEAD cannot boot due to committed conflict markers.
-- 62 tests are discovered; the suite errors at boot; 1 assertion executes.
-- CI triggers only on `sanctum-scan/**` pushes and `main` PRs, and runs one test file.
+- At the QODOR-001 revision, HEAD could not boot due to committed conflict markers; that blocker is repaired and the suite now runs (94 tests, 1,017 assertions, 1 MySQL-only skip).
+- The original CI ran one test file on limited triggers. Since 2026-11-16 the workflow runs on every push/PR, executes the full suite, and wires the ADR 0016 gates; GitHub execution is pending.
 - Sanctum Scan has no wallet/transaction coupling.
-- Settlement code is orphaned and untested.
+- Settlement code was orphaned and untested at the examined revision; it is now wired, and the full suite is green.
+- Settlement transitions are exhaustively matrix-tested (144 combinations); MySQL lock contention is covered by a skipped-by-default concurrency test that CI runs explicitly.
+- 14 pre-existing duplicate route names remain in the legacy surface and are allowlisted (R-26); Sanctum Scan route names are unique and asserted by a test.
+- Four legacy routes reference missing controller methods and are allowlisted (R-29); `route:list` needs a migrated database, so the MySQL job runs the boot smoke while the test suite asserts the registry.
 - M012–M014 provenance export/verifier code is absent from this revision.
 - ADR 0014 is absent; ADR 0012 and ADR 0015 disagree on the identity-gate status code (422 vs 403; code and API doc use 403).
 - `phpseclib/phpseclib 4.0.1` is locked and has an advisory.

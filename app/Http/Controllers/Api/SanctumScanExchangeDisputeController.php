@@ -7,6 +7,7 @@ use App\Models\SanctumScanExchangeDispute;
 use App\Services\SanctumScan\ExchangeDisputeManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
 class SanctumScanExchangeDisputeController extends Controller
@@ -31,6 +32,14 @@ class SanctumScanExchangeDisputeController extends Controller
         int $exchangeId,
         ExchangeDisputeManager $disputes
     ): JsonResponse {
+        [$guard, $actorId] = $this->actor($request);
+
+        // Conflict precedence: a duplicate dispute is reported even when the
+        // request body is incomplete, so clients can distinguish state errors.
+        if ($disputes->show($exchangeId, $guard, $actorId) !== null) {
+            return $this->result('dispute_exists');
+        }
+
         $validator = Validator::make($request->all(), [
             'category' => 'required|in:non_delivery,quantity_mismatch,quality_concern,payment_question,terms_disagreement,other',
             'statement' => ['required', 'string', 'max:3000', 'not_regex:/\A\s*\z/'],
@@ -40,7 +49,6 @@ class SanctumScanExchangeDisputeController extends Controller
             return $this->validationError($validator);
         }
 
-        [$guard, $actorId] = $this->actor($request);
         $result = $disputes->open(
             $exchangeId,
             $guard,
@@ -148,11 +156,17 @@ class SanctumScanExchangeDisputeController extends Controller
 
     private function actor(Request $request): array
     {
-        $merchant = $request->user('merchant_api');
+        $guard = Auth::getDefaultDriver();
 
-        if ($merchant) {
+        if ($guard === 'merchant_api') {
+            $merchant = $request->user('merchant_api');
+
+            abort_unless($merchant, 401);
+
             return ['merchant_api', (int) $merchant->getKey()];
         }
+
+        abort_unless($guard === 'api', 403);
 
         $buyer = $request->user('api');
 

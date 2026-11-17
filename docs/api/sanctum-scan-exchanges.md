@@ -107,9 +107,9 @@ Example:
 
 Allowed rail labels: \`mpesa\`, \`bank_transfer\`, \`cash\`, \`card\`, \`other\`.
 
-The amount and currency must match the accepted offer. Only one reference may be submitted per exchange.
+The amount and currency must match the accepted offer. A reference may be submitted once while settlement is \`awaiting_payment\`. If an administrator rejects it (\`payment_rejected\`), the buyer may submit one replacement; the new row is version 2 and points at version 1 through \`supersedes_id\`. Version 1 is never overwritten or deleted. A submission in any other settlement state returns \`payment_reference_exists\`.
 
-The response marks the evidence \`unverified\`. A reference is only a buyer-submitted identifier; it is not confirmation that money was transferred, received or settled. Verification and reconciliation are not implemented in milestone 005.
+The response marks the evidence \`unverified\` and includes its \`version\`. A reference is only a buyer-submitted identifier; it is not confirmation that money was transferred, received or settled. Verification and reconciliation are not implemented in milestone 005.
 
 Payment reference submission uses the existing user PIN and KYC gates.
 
@@ -125,7 +125,7 @@ Payment reference submission uses the existing user PIN and KYC gates.
 | \`cancelled\` | Merchant withdrew before acceptance or resource became unavailable |
 | \`expired\` | Offer expired before acceptance |
 
-Payment evidence has its own verification state and does not change the exchange state.
+Payment evidence has its own verification state and does not change the exchange state. The buyer and merchant projections return the latest evidence version; the admin settlement projection also returns \`payment_evidence_history\` with every version.
 
 ## Evidence and audit trail
 
