@@ -4,7 +4,6 @@ use App\Models\SanctumScanExchange;
 use App\Services\SanctumScan\ExchangeSettlementManager;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
-use Throwable;
 
 $root = dirname(__DIR__, 3);
 
@@ -36,8 +35,9 @@ try {
 
     $connection->getPdo();
     $connection->statement('SET SESSION innodb_lock_wait_timeout = 15');
+    $connectionId = (int) $connection->selectOne('SELECT CONNECTION_ID() AS connection_id')->connection_id;
 
-    file_put_contents($barrierDirectory.'/'.$workerName.'.ready', (string) getmypid(), LOCK_EX);
+    file_put_contents($barrierDirectory.'/'.$workerName.'.ready', (string) $connectionId, LOCK_EX);
 
     $deadline = microtime(true) + 20;
 
@@ -85,7 +85,7 @@ try {
         'to' => $result->to,
         'actor_id' => (int) $actorId,
     ], JSON_THROW_ON_ERROR).PHP_EOL);
-} catch (Throwable $exception) {
+} catch (\\Throwable $exception) {
     fwrite(STDERR, get_class($exception).': '.$exception->getMessage().PHP_EOL);
     exit(1);
 }

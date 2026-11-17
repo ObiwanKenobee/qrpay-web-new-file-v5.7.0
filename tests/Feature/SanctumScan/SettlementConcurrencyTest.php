@@ -179,6 +179,17 @@ class SettlementConcurrencyTest extends TestCase
                 'rejected.ready',
             ]);
 
+            $verifiedConnectionId = (int) file_get_contents($this->barrierDirectory.'/verified.ready');
+            $rejectedConnectionId = (int) file_get_contents($this->barrierDirectory.'/rejected.ready');
+
+            $this->assertGreaterThan(0, $verifiedConnectionId);
+            $this->assertGreaterThan(0, $rejectedConnectionId);
+            $this->assertNotSame(
+                $verifiedConnectionId,
+                $rejectedConnectionId,
+                'The competing workers must use independent MySQL sessions.'
+            );
+
             file_put_contents($this->barrierDirectory.'/start', 'go', LOCK_EX);
 
             // Each worker writes its marker immediately before executing the
