@@ -122,6 +122,9 @@ jobs:
         run: vendor/bin/phpunit tests/Feature/SanctumScan/ProvenanceManifestVerifierCommandTest.php
 
       - name: Run Sanctum Scan feature tests
+        env:
+          APP_ENV: testing
+        run: vendor/bin/phpunit tests/Feature/SanctumScan
       - name: Roll the newest settlement migration down and up
         run: |
           php artisan migrate:rollback --force \
