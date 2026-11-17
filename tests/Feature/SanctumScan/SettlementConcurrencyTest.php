@@ -92,6 +92,21 @@ class SettlementConcurrencyTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        DB::table('sanctum_scan_exchange_payment_evidence')->insert([
+            'exchange_id' => $this->exchangeId,
+            'version' => 1,
+            'rail' => 'bank_transfer',
+            'reference' => 'CONCURRENCY-'.$suffix,
+            'amount' => '25000.00000000',
+            'currency' => 'KES',
+            'verification_status' => 'unverified',
+            'submitted_by_guard' => 'api',
+            'submitted_by_id' => $this->buyerId,
+            'submitted_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     public function test_two_writers_serialize_on_the_exchange_row_and_only_one_transition_wins(): void

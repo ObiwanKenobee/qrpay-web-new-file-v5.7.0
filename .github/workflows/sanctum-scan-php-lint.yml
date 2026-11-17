@@ -103,6 +103,11 @@ jobs:
       - name: Migrate from scratch
         run: php artisan migrate:fresh --force
 
+      # route:list instantiates controllers; legacy virtual-card constructors
+      # read VirtualCardApi::first() and fail on an empty database.
+      - name: Seed route-introspection singletons
+        run: php artisan db:seed --force --class='Database\Seeders\RouteIntrospectionSeeder'
+
       - name: Resolve route registry from a migrated database
         run: php artisan route:list --json > /dev/null
 

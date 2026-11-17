@@ -23,19 +23,23 @@ This strategy starts from what the repository can prove today, not from an assum
 
 **Mainline baseline:** not established. Running `main` in an isolated copy was blocked by sandbox policy in this session. Do not claim mainline tests pass until they are executed.
 
-### Post-repair evidence (2026-11-16)
+### Post-repair evidence (2026-11-17)
 
 | Command | Result |
 |---|---|
-| `composer check` | **94 tests, 1,017 assertions, 1 skipped** (MySQL-only concurrency test), green; G1, G2, G7, G8 also green |
-| `php tools/check-conflict-markers.php` | 1,927 tracked text files clean; a probe file with markers fails the gate |
-| `php tools/check-php-syntax.php` | 950 non-Blade PHP files clean, 715 Blade templates skipped; a probe parse error fails the gate |
-| `./vendor/bin/pint --test` on 30 changed PHP files | PASS |
+| `composer check` | **96 tests, 1,049 assertions, 1 skipped** (MySQL-only concurrency test), green; G1, G2, G7, G8 also green |
+| `php tools/check-conflict-markers.php` | 1,950 tracked text files clean; a probe file with markers fails the gate |
+| `php tools/check-php-syntax.php` | 966 non-Blade PHP files clean, 715 Blade templates skipped; a probe parse error fails the gate |
+| `./vendor/bin/pint --test` on 32 changed PHP files | PASS |
 | `composer validate --strict --no-check-publish` | Valid after relaxing the exact `authorizenet/authorizenet` pin to `~2.0.3` |
 | `composer audit --locked --no-dev` | One advisory (phpseclib) allowlisted with rationale under R-28; abandoned package warned |
-| `php artisan route:list --json` | Blocked locally: boot queries `virtual_card_apis` before a database is available; the MySQL CI job runs this after `migrate:fresh` |
+| `php artisan migrate:fresh --force` on MySQL 9.4 | All migrations green after two named-constraint/index-ordering fixes (M019 record) |
+| `php artisan db:seed --class='Database\Seeders\RouteIntrospectionSeeder'` | Green; writes the singleton rows legacy virtual-card controller constructors dereference |
+| `php artisan route:list --json` on migrated MySQL | Exit 0, 1,347 routes; required the introspection fixture because controller constructors read `virtual_card_apis` |
+| Backfill migration rollback + re-migrate on MySQL | Exit 0; `down()` then `up()` reapplied cleanly |
+| `SANCTUM_SETTLEMENT_CONCURRENCY=1 vendor/bin/phpunit …SettlementConcurrencyTest` | **1 test, 6 assertions, green on MySQL** (skipped on SQLite) |
 
-The suite is green on SQLite. Concurrency safety is asserted only by the MySQL-gated test, never by SQLite. The MySQL CI job has not executed yet because no local MySQL or Docker daemon was available.
+The suite is green on SQLite. Concurrency safety is asserted only by the MySQL-gated test, never by SQLite. The MySQL job's full step sequence was executed locally on 2026-11-17 against a disposable MySQL 9.4 instance; only execution on the GitHub runner remains pending (R-02).
 
 ### Discovery vs execution
 
@@ -281,7 +285,7 @@ Delivered:
 5. `tests/Feature/RouteRegistryTest.php` — Sanctum and global route-name uniqueness (with shrink-only legacy allowlists), action resolution, write-route middleware, and settlement action resolution.
 6. `tests/Feature/SanctumScan/AdminOperatorMiddlewareTest.php` — the unmodified production admin stack: role guard (logout/404), app-mode write block, and pending-2FA redirect (M018).
 
-Wired in M017: the workflow triggers on every branch and PR, runs the full suite, and includes a MySQL job with `SANCTUM_SETTLEMENT_CONCURRENCY=1` and the settlement backfill down/up. The MySQL job is unexecuted until the first push. PHPStan remains deferred because it is not installed (no gate claimed).
+Wired in M017: the workflow triggers on every branch and PR, runs the full suite, and includes a MySQL job with `SANCTUM_SETTLEMENT_CONCURRENCY=1`, the settlement backfill down/up, and a route-introspection fixture. The MySQL job's step sequence was executed locally on 2026-11-17; the first GitHub run is still pending (R-02). PHPStan remains deferred because it is not installed (no gate claimed).
 
 ---
 
@@ -289,7 +293,7 @@ Wired in M017: the workflow triggers on every branch and PR, runs the full suite
 
 - [x] The suite boots and runs at HEAD.
 - [x] CI runs on every branch/PR and executes all tests (workflow wired; first GitHub run pending).
-- [ ] Feature tests use real migrations; MySQL job passes (job wired, unexecuted).
+- [ ] Feature tests use real migrations; MySQL job passes (sequence green locally on MySQL 9.4; GitHub run pending).
 - [x] Settlement has an exhaustive matrix and an HTTP lifecycle test.
 - [x] Route names are unique and public routes are allowlisted (legacy debt tracked).
 - [ ] Static analysis passes (PHPStan not installed; deferred).

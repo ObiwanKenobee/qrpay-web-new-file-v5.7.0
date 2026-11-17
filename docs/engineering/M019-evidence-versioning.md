@@ -63,8 +63,41 @@ enforces it if two submissions race.
 | `vendor/bin/phpunit` on the state-machine, settlement, exchange, and middleware suites | green |
 | `SettlementLifecycleTest` new scenario | rejection → refused direct verification → version-2 submission → version-1 preserved with supersession link → admin history → resubmission event → verification of version 2 |
 | `PaymentEvidenceVersioningMigrationTest` | composite unique key present, old unique removed; `down()` restores the single-column unique (7 assertions) |
-| `composer check` | **94 tests, 1,017 assertions, 1 skipped (MySQL-only), green** |
-| G8 Pint | 30 changed PHP files pass |
+| `composer check` | **96 tests, 1,049 assertions, 1 skipped (MySQL-only), green** |
+| G8 Pint | 32 changed PHP files pass |
+
+## MySQL gate verification (local, 2026-11-17)
+
+The full `mysql` CI job sequence was executed against a disposable MySQL 9.4
+instance (root, empty database, `migrate:fresh`):
+
+| Step | Result |
+|---|---|
+| `php artisan migrate:fresh --force` | Green, all migrations including `2026_11_16_130000` |
+| `php artisan db:seed --class='Database\Seeders\RouteIntrospectionSeeder'` | Green |
+| `php artisan route:list --json` | Exit 0, 1,347 routes |
+| Backfill `migrate:rollback --path=…2026_11_16_120000…` then `migrate` | Exit 0; backfill reapplied |
+| `SANCTUM_SETTLEMENT_CONCURRENCY=1` on `SettlementConcurrencyTest` | **1 test, 6 assertions, green** |
+
+Three defects were found only by running the job:
+
+1. `sanctum_scan_exchange_evidence_reviews` used the default foreign-key name
+   `sanctum_scan_exchange_evidence_reviews_reviewed_by_admin_id_foreign`
+   (67 characters), which exceeds MySQL's 64-character identifier limit. It now
+   uses the explicit name `scan_evidence_review_admin_foreign`.
+2. The versioning migration dropped `unique(exchange_id)` while the
+   `exchange_id` foreign key still needed an index. `up()` now adds
+   `unique(exchange_id, version)` first; `down()` restores `unique(exchange_id)`
+   before dropping the composite key.
+3. `route:list` instantiates controllers, and ten legacy virtual-card
+   constructors dereference `VirtualCardApi::first()`, so the command failed on
+   an empty database. The workflow now seeds a gate fixture
+   (`RouteIntrospectionSeeder`, documented in ADR 0016's amendment).
+
+The `SettlementConcurrencyTest` fixture also lacked the payment-evidence row the
+verification guard requires, and `AdminOperatorMiddlewareTest`'s happy-path
+exchange lacked one too. Both fixtures now insert matching unverified evidence;
+the production contract was correct and unchanged.
 
 ## Changes
 
@@ -85,7 +118,13 @@ enforces it if two submissions race.
 - `tests/Feature/SanctumScan/EconomicExchangeLifecycleTest.php`,
   `tests/Feature/SanctumScan/AdminOperatorMiddlewareTest.php` — load the new
   migration
-- ADR 0018, ADR 0017 amendment, ADR index, exchange API guide, feature map
+- `database/migrations/2026_11_13_166000_create_sanctum_scan_exchange_evidence_reviews_table.php`
+  — explicit short foreign-key name for MySQL
+- `database/seeders/RouteIntrospectionSeeder.php`,
+  `.github/workflows/sanctum-scan-php-lint.yml` — route-introspection fixture
+  and its CI step
+- ADR 0016 amendment, ADR 0018, ADR 0017 amendment, ADR index, exchange API
+  guide, feature map
 
 ## Limitations
 
@@ -95,7 +134,8 @@ enforces it if two submissions race.
 - Rejected settlement on an exchange that later closes remains rejected;
   cancellation does not rewrite it.
 - No provider statement ingestion, automatic matching, or funds movement.
-- The MySQL migration and concurrency checks remain unexecuted until CI runs.
+- The MySQL migration and concurrency checks pass locally on MySQL 9.4; the
+  GitHub Actions run remains pending (R-02).
 
 ## Next
 

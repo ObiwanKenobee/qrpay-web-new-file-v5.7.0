@@ -184,17 +184,18 @@ Implemented on `feature/qrpay-update`:
 - `SettlementStateMachineTest` (10 tests / 295 assertions), `SettlementLifecycleTest`
   (9 tests), `SettlementBackfillMigrationTest` (1 test), `RouteRegistryTest`, and a
   MySQL-gated `SettlementConcurrencyTest`.
-- Full suite: `composer check` → 94 tests, 1,017 assertions, 1 skipped (MySQL
-  concurrency), green on SQLite; G1, G2, G7, G8 green. Pint passes on all 30
-  changed PHP files. The CI workflow is wired but has not executed on GitHub.
+- Full suite: `composer check` → 96 tests, 1,049 assertions, 1 skipped (MySQL
+  concurrency), green on SQLite; G1, G2, G7, G8 green. Pint passes on all 32
+  changed PHP files. The CI workflow is wired; its MySQL sequence is green
+  locally on MySQL 9.4 and has not yet run on GitHub.
 - Operator middleware: `AdminOperatorMiddlewareTest` exercises the production
   admin stack (role guard, app mode, 2FA) and passes (M018).
 - Evidence versioning: rejection can be reopened by a buyer's new evidence
   version, without rewriting history (M019, ADR 0018).
 
 Resolved since the first draft: the MySQL job and its migration `up/down` step
-are wired (unexecuted); ADR 0012 records the implemented 403 contract; the
+run green locally; ADR 0012 records the implemented 403 contract; the
 superseded `SanctumScanUserIdentityController` is deleted. The remaining
-acceptance gap is CI/MySQL execution.
+acceptance gap is execution on GitHub and branch protection.
 - Fourteen pre-existing legacy route names are duplicated and block a global
   uniqueness gate.

@@ -19,7 +19,7 @@ Likelihood/impact are engineering judgements unless marked **verified**. “Veri
 - **Root cause:** Commit `4ddb392` committed an unresolved merge conflict.
 - **Mitigation:** Resolve the conflict in a dedicated commit; run `php -l`, `php artisan --version`, and the full suite. Add a pre-commit and CI conflict-marker check (see R-02).
 - **Owner:** Current branch owner
-- **Status:** Resolved 2026-11-16 — conflict resolved on the HEAD side; `php artisan --version` reports 12.72.0; `composer check` is green (94 tests, 1,017 assertions, 1 MySQL-only skip) and enforces the conflict-marker gate.
+- **Status:** Resolved 2026-11-16 — conflict resolved on the HEAD side; `php artisan --version` reports 12.72.0; `composer check` is green (96 tests, 1,049 assertions, 1 MySQL-only skip) and enforces the conflict-marker gate.
 
 ### R-02 — CI does not validate the active branch and runs almost nothing
 
@@ -27,7 +27,7 @@ Likelihood/impact are engineering judgements unless marked **verified**. “Veri
 - **Impact:** Critical — defects reach the branch/main undetected
 - **Evidence:** At the examined revision, [`.github/workflows/sanctum-scan-php-lint.yml`](../../.github/workflows/sanctum-scan-php-lint.yml) triggered only on `sanctum-scan/**` pushes and `main` PRs, linted changed files, and executed one test file. M017 replaced that workflow.
 - **Mitigation:** Trigger on all branches/PRs; run all tests, Pint, static analysis, `composer audit`, route checks, and a MySQL migration job. Enable branch protection.
-- **Status:** Mitigated in code 2026-11-16 (M017) — the workflow triggers on every push/PR and runs G1, G2, G3, G5 assertions, G7, G8 plus a MySQL job. Remaining: first GitHub execution and branch protection are unverified; G6 (PHPStan) is deferred.
+- **Status:** Mitigated in code 2026-11-16 (M017) — the workflow triggers on every push/PR and runs G1, G2, G3, G5 assertions, G7, G8 plus a MySQL job. The MySQL job's step sequence is green locally on MySQL 9.4 (2026-11-17). Remaining: first GitHub execution and branch protection are unverified; G6 (PHPStan) is deferred.
 
 ### R-03 — Unauthenticated webhooks can mutate financial state
 
@@ -99,9 +99,9 @@ Likelihood/impact are engineering judgements unless marked **verified**. “Veri
 
 - **Likelihood:** Certain (verified)
 - **Impact:** High — false confidence in financial and protocol behavior
-- **Evidence:** Tests hand-build SQLite schemas, manually call migration `up()` on selected files, and strip middleware; SQLite `lockForUpdate` does not block. The MySQL job that would cover this is wired in M017 but has not executed.
+- **Evidence:** Tests hand-build SQLite schemas, manually call migration `up()` on selected files, and strip middleware; SQLite `lockForUpdate` does not block. The MySQL job's step sequence is green locally on MySQL 9.4 (2026-11-17); the GitHub runner run is pending.
 - **Mitigation:** Adopt `RefreshDatabase` for feature tests, add a MySQL CI job, remove test-only middleware bypasses except where explicitly justified, and add concurrency tests for locked paths.
-- **Status:** Partially mitigated 2026-11-16 — settlement now has a pure transition matrix, a migration/backfill test, and a MySQL-gated concurrency test that the CI MySQL job runs. The broader suite still uses handcrafted schemas and middleware bypasses. PHPStan/Larastan is still not installed.
+- **Status:** Partially mitigated 2026-11-17 — settlement now has a pure transition matrix, a migration/backfill test, and a MySQL concurrency test that passed locally (1 test, 6 assertions). The broader suite still uses handcrafted schemas and middleware bypasses. PHPStan/Larastan is still not installed.
 
 ### R-11 — Settlement state machine is orphaned and internally inconsistent
 
@@ -109,7 +109,7 @@ Likelihood/impact are engineering judgements unless marked **verified**. “Veri
 - **Impact:** High — misleading capability, broken cancellation, future money risk
 - **Evidence (baseline):** [`app/Services/SanctumScan/ExchangeSettlementManager.php`](../../app/Services/SanctumScan/ExchangeSettlementManager.php) had no caller; `onPaymentEvidenceSubmitted()` was never invoked; `cancel()` passed `cancelled`, which was not an allowed transition from `awaiting_payment`; `'system'` bypassed transition validation. The settlement migration was not applied in tests.
 - **Mitigation:** Implemented the QODOR-002 slice: typed `SettlementStateMachine`, rewritten manager with no system bypass, buyer evidence transition, closed-exchange consistency, admin show/transition API, reversible backfill, and four test suites.
-- **Status:** Resolved 2026-11-16 — verified by `SettlementStateMachineTest` (144-combination matrix), `SettlementLifecycleTest` (HTTP lifecycle, conflicts, authorisation), `SettlementBackfillMigrationTest`, and the MySQL-gated `SettlementConcurrencyTest`. MySQL concurrency remains unexecuted until the G4 CI job exists.
+- **Status:** Resolved 2026-11-16 — verified by `SettlementStateMachineTest` (144-combination matrix), `SettlementLifecycleTest` (HTTP lifecycle, conflicts, authorisation), `SettlementBackfillMigrationTest`, and the MySQL-gated `SettlementConcurrencyTest`, which passed locally against MySQL 9.4 on 2026-11-17.
 
 ### R-12 — Duplicate admin identity implementations and route-name collision
 
@@ -171,9 +171,9 @@ Likelihood/impact are engineering judgements unless marked **verified**. “Veri
 
 - **Likelihood:** Certain (verified)
 - **Impact:** Medium-High — schema drift or migration failure during deployment
-- **Evidence:** 205 migrations; tests run selected migrations manually on SQLite; no CI job runs `migrate:fresh` on MySQL.
+- **Evidence:** 205 migrations; tests run selected migrations manually on SQLite; the MySQL job now runs `migrate:fresh`, the backfill down/up, and `route:list` (executed green locally on MySQL 9.4, 2026-11-17).
 - **Mitigation:** Add a MySQL migration job and a deployment preflight check; test `down()` where safe.
-- **Status:** Partially mitigated 2026-11-16 — the settlement column and backfill have exercised `up()`/`down()` on SQLite, and the CI MySQL job runs `migrate:fresh`, the backfill down/up, and the concurrency test. The full migration set is still unverified until that job executes.
+- **Status:** Partially mitigated 2026-11-17 — the full migration set applied cleanly on MySQL 9.4 after two MySQL-only fixes (overlong foreign-key identifier; unique-index ordering during the versioning migration). The GitHub runner run is the remaining evidence.
 
 ---
 
@@ -188,7 +188,7 @@ Likelihood/impact are engineering judgements unless marked **verified**. “Veri
 
 - **Evidence:** Pint reports 6 style issues across 8 Sanctum Scan service files; no PHPStan/Larastan.
 - **Mitigation:** Add Pint `--test` and Larastan to CI; fix incrementally, starting with the bounded module.
-- **Status:** Partially mitigated 2026-11-16 — Pint `--test` is enforced on changed files in CI and passes on all 30 changed PHP files. Unchanged legacy files still report style issues; PHPStan is not installed, so static analysis remains unmitigated.
+- **Status:** Partially mitigated 2026-11-17 — Pint `--test` is enforced on changed files in CI and passes on all 32 changed PHP files. Unchanged legacy files still report style issues; PHPStan is not installed, so static analysis remains unmitigated.
 
 ### R-22 — PHP/runtime version drift
 
@@ -224,7 +224,7 @@ Likelihood/impact are engineering judgements unless marked **verified**. “Veri
 - **Impact:** Medium — the tests prove controller behaviour but not that `app.mode`, RBAC, or 2FA protect the route in production
 - **Evidence:** `SettlementLifecycleTest` disables `Admin\AppModeGuard` and `Admin\RoleGuard`; `Admin\GoogleTwoFactor` passed because the synthetic admin had 2FA disabled. Route registration kept the production middleware stack.
 - **Mitigation:** Added `AdminOperatorMiddlewareTest`, which runs the unmodified production stack with seeded role/permission tables and covers: super-admin read + transition, role-less logout, non-super-admin without permission (404), demo-mode read allowed / write rejected, and pending 2FA redirect.
-- **Status:** Resolved 2026-11-16 — 5 tests / 14 assertions green; current full suite 94 tests / 1,017 assertions.
+- **Status:** Resolved 2026-11-16 — 5 tests / 14 assertions green; current full suite 96 tests / 1,049 assertions.
 
 ### R-28 — phpseclib advisory cannot be fixed without replacing Passport
 
@@ -242,16 +242,24 @@ Likelihood/impact are engineering judgements unless marked **verified**. “Veri
 - **Mitigation:** The four signatures are allowlisted in `tools/route-registry-allowlist.php` with a shrink-only assertion so new dead routes fail the gate. A dedicated cleanup should remove the route definitions (turning the 500 into a 404) or implement the intended methods.
 - **Status:** Accepted debt 2026-11-16
 
+### R-30 — Route introspection depends on seeded settings rows
+
+- **Likelihood:** Certain (verified 2026-11-17)
+- **Impact:** Low-Medium — `route:list` and any tool that instantiates controllers fail on a fresh database, so the gate needs a fixture
+- **Evidence:** Ten legacy virtual-card controllers under `app/Http/Controllers/User` and `app/Http/Controllers/Api/User` read `VirtualCardApi::first()` in their constructors; `php artisan route:list` instantiates controllers to collect middleware. `CustomServiceProvider::boot()` performs similar singleton reads inside a swallowing `try/catch`.
+- **Mitigation:** The MySQL job seeds `Database\Seeders\RouteIntrospectionSeeder` with the required admin and `virtual_card_apis` rows (ADR 0016 amendment). Removing the fixture requires moving constructor reads behind request-time resolution.
+- **Status:** Mitigated in the gate 2026-11-17; the constructor pattern remains legacy debt.
+
 ---
 
 ## Prioritised remediation sequence
 
 1. ~~**R-01** — restore bootability.~~ Resolved 2026-11-16.
-2. **R-02** — CI gates are wired (M017); confirm the first GitHub run, enable branch protection, and keep the MySQL job green.
+2. **R-02** — CI gates are wired (M017); the MySQL sequence is green locally (2026-11-17). Confirm the first GitHub run, enable branch protection, and keep the MySQL job green.
 3. **R-03 / R-04 / R-05 / R-06 / R-07** — close unauthenticated/unauthorized state-changing surfaces.
 4. **R-08 / R-09** — financial-path review and concurrency characterization before any refactor.
 5. **R-10 / R-19** — migration-backed MySQL tests and PHPStan ratchet. ~~R-27 production-middleware coverage~~ resolved 2026-11-16 (M018).
-6. ~~**R-11** — complete the settlement slice (QODOR-002).~~ Resolved 2026-11-16; MySQL job wired in M017.
-7. **R-13 / R-26 / R-29** — finish legacy duplicate/dead-route cleanup and remaining documentation reconciliation. ~~R-12 / R-17~~ resolved 2026-11-16 (M018).
+6. ~~**R-11** — complete the settlement slice (QODOR-002).~~ Resolved 2026-11-16; MySQL job wired in M017 and green locally 2026-11-17.
+7. **R-13 / R-26 / R-29 / R-30** — finish legacy duplicate/dead-route cleanup, data-dependent route introspection, and remaining documentation reconciliation. ~~R-12 / R-17~~ resolved 2026-11-16 (M018).
 8. **R-14 / R-15 / R-16 / R-18 / R-28** — hardening and dependency follow-up.
 9. **R-20–R-25** — operational and maintainability work.
