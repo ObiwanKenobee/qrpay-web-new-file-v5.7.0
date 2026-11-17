@@ -2,7 +2,7 @@
 
 **Status:** Continuously reconciled feature map  
 **Date:** 2026-11-17  
-**Branch:** `main` at `e9cdf766`; current stacked work: M020 PR #25, M021 PR #26, M022 PR #27, M023 PR #28, M024 PR #29, M024-A PR #30, and M025 PR #32 (all unmerged)
+**Branch:** `main` at `e9cdf766`; current stacked work: M020 PR #25, M021 PR #26, M022 PR #27, M023 PR #28, M024 PR #29, M024-A PR #30, M025 PR #32, and M025-A PR #33 (all unmerged)
 
 ## Status legend
 
@@ -136,6 +136,7 @@ All entries are **Implemented (static)** unless noted. Legacy features have no a
 | M023 | Fail-safe evidence rollback | In progress: versioning migration refuses downgrade before DDL if non-initial or superseding evidence exists | `PaymentEvidenceVersioningMigrationTest` covers safe version-1 rollback and refused rollback with intact rows, indexes and self-reference | [M023 engineering record](docs/engineering/M023-fail-safe-evidence-rollback.md); migration guard and tests |
 | M024 | Operator reconciliation workspace | In progress: read-only queue and consolidated case projection under admin auth, role and 2FA middleware | M024-A PR #30 adds queue/filter/pagination, projection/privacy and route-permission feature tests; execution blocked before runner allocation (not a test failure) | [M024 engineering record](docs/engineering/M024-operator-reconciliation-workspace.md); [M024-A test record](docs/engineering/M024-A-reconciliation-security-tests.md); no new decision write path |
 | M025 | Nakuru potato pilot participant and value-chain scope | In progress: bounded scope and readiness gates documented; no partner or participant commitment confirmed | Scope document only; live pilot and field outcomes not started | [M025 pilot scope](docs/engineering/M025-pilot-participant-and-value-chain-scope.md); no new product code or payment integration |
+| M025-A | Participant qualification and baseline discovery | In progress: desk-research leads, screening gates, interviews and baseline instruments prepared; no outreach or fieldwork claimed | Five-consecutive-trade method and de-identified templates ready; no participants qualified and no baseline data collected | [M025-A discovery pack](docs/engineering/M025-A-participant-qualification-and-baseline-discovery.md); field data must not be committed to Git |
 
 **Coupling fact:** M002–M020 Sanctum Scan services do not move funds and do not read/write legacy wallet or transaction tables. Preserve this boundary.
 

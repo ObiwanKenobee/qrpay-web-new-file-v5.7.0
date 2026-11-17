@@ -136,10 +136,19 @@ exchange capabilities, and defines baseline metrics, manual controls, costs,
 privacy gates and go/no-go conditions. Partners are not confirmed, participant
 recruitment has not started, and no live pilot is authorised or claimed.
 
-The M025 scope work does not mark M024 or M024-A verified. No live transactions
-should begin until the M024/M024-A code and tests have passed required review
-and validation, actual participants have qualified, and the readiness gates in
-the M025 record are satisfied.
+**M025-A — Participant qualification and baseline discovery** is in progress on
+`sanctum-scan/m025-a-participant-qualification-baseline` (PR #33):
+[M025-A discovery pack](M025-A-participant-qualification-and-baseline-discovery.md).
+Desk research identifies County FFBS, NPCK and FIPS Africa as potential referral
+channels only. It prepares mandatory qualification gates, seller/buyer interview
+guides, a 100-point route scorecard, five-consecutive-trade sampling, de-identified
+baseline templates and privacy review controls. No outreach, participant
+qualification or baseline sampling is claimed.
+
+M025/M025-A do not mark M024 or M024-A verified. No live transactions should
+begin until the M024/M024-A code and tests have passed required review and
+validation, participants have qualified, a five-trade baseline is captured,
+and every M025 readiness gate is approved.
 
 **M026 — Consistent database snapshot for M012 provenance exports** remains a
 technical follow-up. M012 currently composes provenance context and evidence
