@@ -27,7 +27,7 @@ No production settlement code, database schema, payment provider integration, wa
 2. A third MySQL connection begins a transaction and locks the exchange row.
 3. Two PHP workers boot independently, establish separate MySQL sessions, and wait on a shared start signal.
 4. Each worker calls `ExchangeSettlementManager::transition()` for the same exchange, with `expectedFrom=payment_evidence_submitted`.
-5. A `beforeExecuting` callback writes a marker immediately before each worker executes the manager's `SELECT ... FOR UPDATE`. The PHPUnit process waits for both markers while it still owns the row lock.
+5. A `beforeExecuting` callback writes a marker immediately before each worker executes the manager's `SELECT ... FOR UPDATE`. The PHPUnit process waits for both markers and polls MySQL's process list until both SELECT ... FOR UPDATE statements are visible while it still owns the row lock.
 6. The PHPUnit process commits its coordinator transaction. InnoDB serializes the competing manager transactions: one commits its decision and event; the other reads the new status and returns `stale_expected_status`.
 7. The test inspects the final row and event table after both workers exit.
 
@@ -36,7 +36,7 @@ The coordinator is only a test synchronization mechanism. It does not write sett
 ## Acceptance criteria
 
 - [ ] Both competing transitions run in separate PHP processes and separate MySQL connections.
-- [ ] Both manager lock queries are reached before the coordinator releases the row lock.
+- [ ] MySQL reports both manager lock queries as active before the coordinator releases the row lock.
 - [ ] Exactly one transition succeeds.
 - [ ] The losing transition returns `stale_expected_status`.
 - [ ] Exactly one `settlement_status_changed` event exists for the test exchange.

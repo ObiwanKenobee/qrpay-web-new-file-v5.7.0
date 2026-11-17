@@ -200,9 +200,12 @@ class SettlementConcurrencyTest extends TestCase
                 'rejected.lock-query-started',
             ]);
 
-            // Let both workers leave their before-execution callbacks and send
-            // the SQL statements while the coordinator still owns the lock.
-            usleep(200000);
+            // Confirm MySQL itself sees both workers executing their row-lock
+            // statements while the coordinator still owns the exchange lock.
+            $this->waitForMySqlLockQueries([
+                $verifiedConnectionId,
+                $rejectedConnectionId,
+            ]);
 
             $coordinator->commit();
 
@@ -307,6 +310,40 @@ class SettlementConcurrencyTest extends TestCase
         } while (microtime(true) < $deadline);
 
         $this->fail('Timed out waiting for concurrency barrier files: '.implode(', ', $missing));
+    }
+
+
+    private function waitForMySqlLockQueries(array $connectionIds, int $timeoutSeconds = 15): void
+    {
+        $deadline = microtime(true) + $timeoutSeconds;
+
+        do {
+            $rows = DB::select(
+                'SELECT ID, INFO FROM information_schema.PROCESSLIST WHERE ID IN (?, ?) AND INFO IS NOT NULL',
+                $connectionIds
+            );
+
+            $observedConnectionIds = [];
+
+            foreach ($rows as $row) {
+                $query = strtolower((string) $row->info);
+
+                if (
+                    str_contains($query, 'sanctum_scan_exchanges')
+                    && preg_match('/\bfor\s+update\b/', $query) === 1
+                ) {
+                    $observedConnectionIds[(int) $row->id] = true;
+                }
+            }
+
+            if (count($observedConnectionIds) === 2) {
+                return;
+            }
+
+            usleep(10000);
+        } while (microtime(true) < $deadline);
+
+        $this->fail('MySQL did not show both competing SELECT ... FOR UPDATE statements before the coordinator released its lock.');
     }
 
     protected function tearDown(): void
