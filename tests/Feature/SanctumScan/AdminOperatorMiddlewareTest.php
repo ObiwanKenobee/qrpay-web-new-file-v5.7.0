@@ -261,17 +261,19 @@ class AdminOperatorMiddlewareTest extends TestCase
             ->where('admin_id', $admin->getKey())
             ->value('admin_role_id');
 
-        foreach (['admin.sanctum.reconciliation.index', 'admin.sanctum.reconciliation.show'] as $routeName) {
-            $permissionId = DB::table('admin_role_permissions')->insertGetId([
-                'admin_role_id' => $roleId,
-                'admin_id' => $admin->getKey(),
-                'name' => 'Reconciliation '.str_replace('.', ' ', $routeName),
-                'slug' => str_replace('.', '-', $routeName),
-                'status' => true,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+        // One permission record belongs to the role; its hasPermissions relation
+        // contains every route granted to that role.
+        $permissionId = DB::table('admin_role_permissions')->insertGetId([
+            'admin_role_id' => $roleId,
+            'admin_id' => $admin->getKey(),
+            'name' => 'Sanctum Scan Reconciliation',
+            'slug' => 'sanctum-scan-reconciliation',
+            'status' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
+        foreach (['admin.sanctum.reconciliation.index', 'admin.sanctum.reconciliation.show'] as $routeName) {
             DB::table('admin_role_has_permissions')->insert([
                 'admin_role_permission_id' => $permissionId,
                 'route' => $routeName,
