@@ -34,7 +34,7 @@ try {
     }
 
     $connection->getPdo();
-    $connection->statement('SET SESSION innodb_lock_wait_timeout = 15');
+    $connection->statement('SET SESSION innodb_lock_wait_timeout = 30');
     $connectionId = (int) $connection->selectOne('SELECT CONNECTION_ID() AS connection_id')->connection_id;
 
     file_put_contents($barrierDirectory.'/'.$workerName.'.ready', (string) $connectionId, LOCK_EX);

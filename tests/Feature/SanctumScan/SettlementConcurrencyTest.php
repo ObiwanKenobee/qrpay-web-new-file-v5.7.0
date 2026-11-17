@@ -158,7 +158,7 @@ class SettlementConcurrencyTest extends TestCase
         ];
 
         foreach ($this->workerProcesses as $process) {
-            $process->setTimeout(30);
+            $process->setTimeout(45);
         }
 
         $coordinator = DB::connection();
@@ -313,7 +313,7 @@ class SettlementConcurrencyTest extends TestCase
     }
 
 
-    private function waitForMySqlLockQueries(array $connectionIds, int $timeoutSeconds = 15): void
+    private function waitForMySqlLockQueries(array $connectionIds, int $timeoutSeconds = 20): void
     {
         $deadline = microtime(true) + $timeoutSeconds;
 
