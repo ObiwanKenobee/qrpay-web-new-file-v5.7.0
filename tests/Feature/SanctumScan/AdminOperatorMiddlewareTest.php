@@ -115,6 +115,192 @@ class AdminOperatorMiddlewareTest extends TestCase
             ->assertRedirect(route('admin.authorize.google.2fa'));
     }
 
+
+    public function test_reconciliation_queue_filters_active_cases_and_bounds_pagination(): void
+    {
+        $admin = $this->makeAdmin('reconciliation-queue', superAdmin: false);
+        $this->grantReconciliationPermissions($admin);
+
+        $disputedExchangeId = $this->makeExchange();
+        $this->makeDispute($disputedExchangeId, 'open');
+
+        $paymentExchangeId = $this->makeExchange();
+        DB::table('sanctum_scan_exchanges')->where('id', $paymentExchangeId)
+            ->update(['settlement_status' => 'awaiting_payment']);
+
+        $completedExchangeId = $this->makeExchange();
+        DB::table('sanctum_scan_exchanges')->where('id', $completedExchangeId)
+            ->update(['settlement_status' => 'settled']);
+        $this->makeDispute($completedExchangeId, 'resolved');
+
+        $url = route('admin.sanctum.reconciliation.index');
+
+        $this->actingAs($admin, 'admin')->getJson($url.'?per_page=1')
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 2)
+            ->assertJsonPath('data.pagination.per_page', 1)
+            ->assertJsonPath('data.pagination.current_page', 1)
+            ->assertJsonPath('data.pagination.last_page', 2);
+
+        $this->actingAs($admin, 'admin')->getJson($url.'?page=2&per_page=1')
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 2)
+            ->assertJsonPath('data.pagination.current_page', 2);
+
+        $this->actingAs($admin, 'admin')->getJson($url.'?per_page=500')
+            ->assertOk()
+            ->assertJsonPath('data.pagination.per_page', 100);
+
+        $this->actingAs($admin, 'admin')->getJson($url.'?per_page=0')
+            ->assertOk()
+            ->assertJsonPath('data.pagination.per_page', 1);
+
+        $this->actingAs($admin, 'admin')->getJson($url.'?settlement_status=awaiting_payment')
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 1)
+            ->assertJsonPath('data.cases.0.exchange_id', $paymentExchangeId);
+
+        $this->actingAs($admin, 'admin')->getJson($url.'?dispute_status=open')
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 1)
+            ->assertJsonPath('data.cases.0.exchange_id', $disputedExchangeId);
+    }
+
+    public function test_reconciliation_detail_projects_history_and_never_exposes_storage_location_or_file_bytes(): void
+    {
+        $admin = $this->makeAdmin('reconciliation-detail', superAdmin: false);
+        $this->grantReconciliationPermissions($admin);
+
+        $exchangeId = $this->makeExchange();
+        $disputeId = $this->makeDispute($exchangeId, 'open');
+
+        DB::table('sanctum_scan_exchange_events')->insert([
+            'exchange_id' => $exchangeId,
+            'event_type' => 'settlement_status_changed',
+            'description' => 'Payment evidence submitted',
+            'event_data' => json_encode(['payment_evidence_id' => 1, 'payment_evidence_version' => 1]),
+            'verification_status' => 'unverified',
+            'recorded_by_guard' => 'admin',
+            'recorded_by_id' => $admin->getKey(),
+            'occurred_at' => now(),
+            'created_at' => now(),
+        ]);
+
+        DB::table('sanctum_scan_exchange_dispute_messages')->insert([
+            'dispute_id' => $disputeId,
+            'message_type' => 'participant_statement',
+            'body' => 'The delivery quantity did not match the agreed amount.',
+            'recorded_by_guard' => 'user',
+            'recorded_by_id' => 1,
+            'created_at' => now(),
+        ]);
+
+        $storagePath = 'private/sanctum-scan/reconciliation-secret-object.pdf';
+        $evidenceId = DB::table('sanctum_scan_exchange_dispute_evidence')->insertGetId([
+            'dispute_id' => $disputeId,
+            'evidence_type' => 'document',
+            'original_name' => 'delivery-note.pdf',
+            'storage_disk' => 'private',
+            'storage_path' => $storagePath,
+            'mime_type' => 'application/pdf',
+            'size_bytes' => 4096,
+            'sha256' => str_repeat('a', 64),
+            'caption' => 'Signed delivery note',
+            'submitted_by_guard' => 'user',
+            'submitted_by_id' => 1,
+            'submitted_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('sanctum_scan_exchange_evidence_reviews')->insert([
+            'evidence_id' => $evidenceId,
+            'review_status' => 'accepted',
+            'review_method' => 'manual',
+            'evidence_sha256' => str_repeat('a', 64),
+            'review_summary' => 'Document is legible and relevant.',
+            'reviewed_by_admin_id' => $admin->getKey(),
+            'reviewed_at' => now(),
+            'created_at' => now(),
+        ]);
+
+        $response = $this->actingAs($admin, 'admin')->getJson(
+            route('admin.sanctum.reconciliation.show', ['exchangeId' => $exchangeId])
+        );
+
+        $response->assertOk()
+            ->assertJsonPath('data.case.exchange.id', $exchangeId)
+            ->assertJsonPath('data.case.payment_evidence_history.0.version', 1)
+            ->assertJsonPath('data.case.settlement_timeline.0.event_data.payment_evidence_id', 1)
+            ->assertJsonPath('data.case.dispute.messages.0.body', 'The delivery quantity did not match the agreed amount.')
+            ->assertJsonPath('data.case.dispute.evidence.0.review.status', 'accepted');
+
+        $payload = $response->getContent();
+        $this->assertStringNotContainsString($storagePath, $payload);
+        $this->assertStringNotContainsString('storage_disk', $payload);
+        $this->assertStringNotContainsString('file_bytes', $payload);
+    }
+
+    public function test_reconciliation_routes_deny_admin_without_explicit_route_permissions(): void
+    {
+        $admin = $this->makeAdmin('reconciliation-no-permission', superAdmin: false);
+        $exchangeId = $this->makeExchange();
+
+        $this->actingAs($admin, 'admin')
+            ->getJson(route('admin.sanctum.reconciliation.index'))
+            ->assertNotFound();
+
+        $this->actingAs($admin, 'admin')
+            ->getJson(route('admin.sanctum.reconciliation.show', ['exchangeId' => $exchangeId]))
+            ->assertNotFound();
+    }
+
+    private function grantReconciliationPermissions(Admin $admin): void
+    {
+        $roleId = DB::table('admin_has_roles')
+            ->where('admin_id', $admin->getKey())
+            ->value('admin_role_id');
+
+        // One permission record belongs to the role; its hasPermissions relation
+        // contains every route granted to that role.
+        $permissionId = DB::table('admin_role_permissions')->insertGetId([
+            'admin_role_id' => $roleId,
+            'admin_id' => $admin->getKey(),
+            'name' => 'Sanctum Scan Reconciliation',
+            'slug' => 'sanctum-scan-reconciliation',
+            'status' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        foreach (['admin.sanctum.reconciliation.index', 'admin.sanctum.reconciliation.show'] as $routeName) {
+            DB::table('admin_role_has_permissions')->insert([
+                'admin_role_permission_id' => $permissionId,
+                'route' => $routeName,
+                'title' => $routeName,
+                'last_edit_by' => $admin->getKey(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $admin->refresh();
+    }
+
+    private function makeDispute(int $exchangeId, string $status): int
+    {
+        return (int) DB::table('sanctum_scan_exchange_disputes')->insertGetId([
+            'exchange_id' => $exchangeId,
+            'category' => 'delivery',
+            'status' => $status,
+            'opened_by_guard' => 'user',
+            'opened_by_id' => 1,
+            'opened_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
     private function createIdentityTables(): void
     {
         Schema::create('users', function (Blueprint $table) {
@@ -219,6 +405,10 @@ class AdminOperatorMiddlewareTest extends TestCase
             '2026_11_13_162000_create_sanctum_scan_exchange_payment_evidence_table.php',
             '2026_11_16_130000_add_versioning_to_sanctum_scan_exchange_payment_evidence_table.php',
             '2026_11_14_110000_add_settlement_status_to_sanctum_scan_exchanges_table.php',
+            '2026_11_13_163000_create_sanctum_scan_exchange_disputes_table.php',
+            '2026_11_13_164000_create_sanctum_scan_exchange_dispute_messages_table.php',
+            '2026_11_13_165000_create_sanctum_scan_exchange_dispute_evidence_table.php',
+            '2026_11_13_166000_create_sanctum_scan_exchange_evidence_reviews_table.php',
         ] as $migrationFile) {
             (require base_path('database/migrations/'.$migrationFile))->up();
         }
@@ -260,13 +450,16 @@ class AdminOperatorMiddlewareTest extends TestCase
         return $admin->fresh();
     }
 
+    private int $fixtureSequence = 0;
+
     private function makeExchange(): int
     {
+        $suffix = ++$this->fixtureSequence;
         $merchantId = DB::table('merchants')->insertGetId([
             'firstname' => 'Middleware',
             'lastname' => 'Merchant',
-            'username' => 'middleware-merchant',
-            'email' => 'middleware-merchant@example.test',
+            'username' => 'middleware-merchant-'.$suffix,
+            'email' => 'middleware-merchant-'.$suffix.'@example.test',
             'password' => bcrypt('not-a-real-password'),
             'business_name' => 'Middleware Merchant Ltd',
             'status' => true,
@@ -280,8 +473,8 @@ class AdminOperatorMiddlewareTest extends TestCase
         $buyerId = DB::table('users')->insertGetId([
             'firstname' => 'Middleware',
             'lastname' => 'Buyer',
-            'username' => 'middleware-buyer',
-            'email' => 'middleware-buyer@example.test',
+            'username' => 'middleware-buyer-'.$suffix,
+            'email' => 'middleware-buyer-'.$suffix.'@example.test',
             'password' => bcrypt('not-a-real-password'),
             'status' => true,
             'email_verified' => true,

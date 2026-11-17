@@ -1,10 +1,10 @@
 # Roadmap Status — QRPay / Sanctum Scan
 
 **Date:** 2026-11-17
-**Branch:** `main` with M020 in progress on PR #25, M021 in progress on `sanctum-scan/m021-canonical-provenance-adrs`, M022 in progress on `sanctum-scan/m022-genuine-settlement-concurrency`, and M023 in progress on `sanctum-scan/m023-fail-safe-evidence-rollback`
+**Branch:** `main` with stacked, unmerged work through M024-A (PRs #25–#30)
 **Method:** roadmap phases from [`README.md`](../README.md#13-development-roadmap) mapped to repository evidence per ADR 0017. A capability is only **Verified** when an executed test or command proves it; roadmap checkboxes are not evidence.
 
-**Current executed baseline:** `composer check` → 96 tests, 1,049 assertions, 1 skipped (MySQL-only concurrency test), green on SQLite; G1, G2, G7, G8 green. Pint passes on all 32 changed PHP files. The MySQL job's full step sequence is green locally on MySQL 9.4 (migrations, route:list 1,347 routes, backfill down/up, concurrency test); only the GitHub runner run is pending.
+**Last recorded local baseline (before M020–M024):** `composer check` → 96 tests, 1,049 assertions, 1 skipped (MySQL-only concurrency test), green on SQLite; G1, G2, G7, G8 green. Pint passed on all 32 PHP files in that earlier revision. The MySQL job's full step sequence was green locally on MySQL 9.4 (migrations, route:list 1,347 routes, backfill down/up, concurrency test). This historical baseline does not validate M020–M024 or M024-A.
 
 Status vocabulary (ADR 0017): **Planned** · **In progress** · **Implemented** · **Verified** · **Retired**.
 
@@ -105,12 +105,29 @@ non-initial or superseding evidence exists. Regression tests assert that the
 history and schema remain intact after refusal.
 
 **M024 — Permission-controlled operator reconciliation workspace** is in progress on
-`sanctum-scan/m024-operator-reconciliation-workspace`:
+`sanctum-scan/m024-operator-reconciliation-workspace` (PR #29):
 [M024 engineering record](M024-operator-reconciliation-workspace.md). The first
 slice is read-only: it joins exchange state, evidence versions, settlement
 decisions and dispute review history under the existing admin role/2FA stack.
 
-**Next engineering priority: M025 — Pilot participant and value-chain scope.** It defines the pilot's participant/value-chain
+**M024-A — Reconciliation security and projection tests** is in progress on
+`sanctum-scan/m024-a-reconciliation-security-tests` (PR #30):
+[M024-A engineering record](M024-A-reconciliation-security-tests.md). Feature
+tests cover active queue cases, filters, pagination bounds, consolidated detail,
+private-storage omission, and route-specific role authorization. They are
+authored but not executed.
+
+**M024-A1 — Restore executable validation** is blocked on owner-side GitHub
+Actions investigation. PR #30 run [44081555371](https://github.com/ObiwanKenobee/qrpay-web-new-file-v5.7.0/actions/runs/44081555371)
+failed again on rerun attempt 2 with both jobs reporting `runner_id: 0` and
+zero steps. This is a pre-runner failure, not a PHP/test result. Existing
+[incident issue #21](https://github.com/ObiwanKenobee/qrpay-web-new-file-v5.7.0/issues/21)
+already records the cross-repository evidence and owner-side Settings/Support
+actions. Do not add more diagnostic workflows or keep retrying until those
+checks are completed.
+
+**Next implementation milestone after validation is restored: M025 — Pilot
+participant and value-chain scope.** It defines the pilot's participant/value-chain
 scope and outcome measures. M026 tracks a consistent-database-snapshot
 guarantee for M012 exports, which currently compose provenance context and
 evidence from separate reads.
