@@ -97,6 +97,8 @@ class SanctumScanExchangeSettlementController extends Controller
             'stale_expected_status' => [409, 'The settlement status changed before this request was applied.'],
             'unknown_settlement_status' => [409, 'The exchange has an unrecognised settlement status.'],
             'invalid_actor' => [403, 'This actor cannot perform the requested settlement transition.'],
+            'payment_evidence_mismatch' => [409, 'The submitted payment evidence is missing, already reviewed, or does not match the accepted amount and currency.'],
+            'buyer_receipt_required' => [409, 'The buyer must confirm receipt before settlement can be recorded.'],
             default => [409, 'The settlement transition could not be applied.'],
         };
 

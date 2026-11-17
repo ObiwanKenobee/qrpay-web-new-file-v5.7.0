@@ -117,8 +117,29 @@ class ExchangeSettlementManager
             return SettlementTransitionResult::failure('already_in_state', $fromStatus, $toStatus);
         }
 
+        if (! $this->actorIdentityIsValid($actorGuard, $actorId)) {
+            return SettlementTransitionResult::failure('invalid_actor', $fromStatus, $toStatus);
+        }
+
         if (! SettlementStateMachine::canTransition($fromStatus, $toStatus, $actorGuard)) {
             return SettlementTransitionResult::failure('invalid_settlement_transition', $fromStatus, $toStatus);
+        }
+
+        if ($toStatus === SettlementStateMachine::VERIFIED) {
+            $paymentEvidence = $exchange->paymentEvidence;
+
+            if (! $paymentEvidence
+                || $paymentEvidence->verification_status !== 'unverified'
+                || $this->normalizeDecimal((string) $paymentEvidence->amount) !==
+                    $this->normalizeDecimal((string) $exchange->amount)
+                || strtoupper((string) $paymentEvidence->currency) !== strtoupper((string) $exchange->currency)) {
+                return SettlementTransitionResult::failure('payment_evidence_mismatch', $fromStatus, $toStatus);
+            }
+        }
+
+        if ($toStatus === SettlementStateMachine::SETTLED
+            && ($exchange->status !== 'received' || $exchange->received_at === null)) {
+            return SettlementTransitionResult::failure('buyer_receipt_required', $fromStatus, $toStatus);
         }
 
         $exchange->forceFill([
@@ -132,7 +153,7 @@ class ExchangeSettlementManager
             "Settlement status changed from {$fromStatus} to {$toStatus}. {$reason}",
             $actorGuard,
             $actorId,
-            $this->verificationStatusFor($actorGuard),
+            $this->verificationStatusFor($actorGuard, $toStatus),
             [
                 'from' => $fromStatus,
                 'to' => $toStatus,
@@ -143,10 +164,38 @@ class ExchangeSettlementManager
         return SettlementTransitionResult::success($exchange, $fromStatus, $toStatus);
     }
 
-    private function verificationStatusFor(string $actorGuard): string
+    private function actorIdentityIsValid(string $actorGuard, int $actorId): bool
     {
         return match ($actorGuard) {
-            'admin' => 'platform_verified',
+            'admin', 'api', 'merchant_api' => $actorId > 0,
+            'system' => $actorId === 0,
+            default => false,
+        };
+    }
+
+    private function normalizeDecimal(string $value): ?string
+    {
+        if (! preg_match('/\\A\\d+(?:\\.\\d{1,8})?\\z/', $value)) {
+            return null;
+        }
+
+        [$whole, $fraction] = array_pad(explode('.', $value, 2), 2, '');
+        $whole = ltrim($whole, '0');
+        $whole = $whole === '' ? '0' : $whole;
+        $fraction = rtrim($fraction, '0');
+
+        return $fraction === '' ? $whole : $whole.'.'.$fraction;
+    }
+
+    private function verificationStatusFor(string $actorGuard, string $toStatus): string
+    {
+        if ($actorGuard === 'admin') {
+            return $toStatus === SettlementStateMachine::REJECTED
+                ? 'platform_rejected'
+                : 'platform_verified';
+        }
+
+        return match ($actorGuard) {
             'api' => 'buyer_declared',
             'merchant_api' => 'merchant_declared',
             default => 'system_recorded',

@@ -14,6 +14,7 @@ use App\Models\SanctumScanExchangeEvent;
 use App\Models\SanctumScanExchangePaymentEvidence;
 use App\Models\SanctumScanResource;
 use App\Models\User;
+use App\Services\SanctumScan\ExchangeSettlementManager;
 use App\Services\SanctumScan\ScanReferenceIssuer;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -275,6 +276,22 @@ class SettlementLifecycleTest extends TestCase
         );
 
         $this->acceptOffer($buyer, $exchangeId);
+
+        $this->actingAs($merchant, 'merchant_api')
+            ->postJson('/merchant-api/merchant/sanctum/exchanges/'.$exchangeId.'/dispatch', [
+                'dispatch_reference' => 'LOCAL-PICKUP-SETTLEMENT',
+                'dispatch_note' => 'Goods made available for buyer collection.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.exchange.status', 'dispatched');
+
+        $this->actingAs($buyer, 'api')
+            ->postJson('/api/user/sanctum/exchanges/'.$exchangeId.'/receipt', [
+                'receipt_note' => 'Buyer confirmed receipt of the goods.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.exchange.status', 'received');
+
         $this->submitEvidence($buyer, $exchangeId);
 
         $this->assertSame(1, $this->settlementEvents($exchangeId)->count());
@@ -361,6 +378,8 @@ class SettlementLifecycleTest extends TestCase
             'reason' => 'The declared reference could not be found on any bank statement.',
         ])->assertOk()
             ->assertJsonPath('data.exchange.settlement_status', 'payment_rejected');
+
+        $this->assertSame('platform_rejected', $this->settlementEvents($exchangeId)->last()->verification_status);
 
         $this->transition($admin, $exchangeId, [
             'to_status' => 'payment_verified',
@@ -536,6 +555,120 @@ class SettlementLifecycleTest extends TestCase
         $this->assertSame(0, SanctumScanExchangePaymentEvidence::query()
             ->where('exchange_id', $exchangeId)->count());
         $this->assertSame(0, $this->settlementEvents($exchangeId)->count());
+    }
+
+    public function test_manager_bounds_actor_ids_and_rejects_non_admin_verification(): void
+    {
+        $merchant = $this->makeMerchant('actor-boundary-seller', 'Actor Boundary Seller');
+        $buyer = $this->makeBuyer('actor-boundary-buyer');
+        $exchangeId = $this->issueOffer($merchant, $buyer, $this->makeResource($merchant));
+        $exchange = SanctumScanExchange::findOrFail($exchangeId);
+        $manager = app(ExchangeSettlementManager::class);
+
+        $systemWithUserId = $manager->transition(
+            $exchange,
+            'payment_evidence_submitted',
+            'system',
+            99,
+            'A system actor must use the reserved zero identifier.'
+        );
+        $this->assertFalse($systemWithUserId->ok);
+        $this->assertSame('invalid_actor', $systemWithUserId->error);
+
+        $apiWithoutUserId = $manager->transition(
+            $exchange,
+            'payment_evidence_submitted',
+            'api',
+            0,
+            'An API actor must be bound to an authenticated buyer.'
+        );
+        $this->assertFalse($apiWithoutUserId->ok);
+        $this->assertSame('invalid_actor', $apiWithoutUserId->error);
+
+        $this->acceptOffer($buyer, $exchangeId);
+        $this->submitEvidence($buyer, $exchangeId);
+
+        $adminWithoutId = $manager->transition(
+            SanctumScanExchange::findOrFail($exchangeId),
+            'payment_verified',
+            'admin',
+            0,
+            'An administrative decision must be bound to an authenticated administrator.'
+        );
+        $this->assertFalse($adminWithoutId->ok);
+        $this->assertSame('invalid_actor', $adminWithoutId->error);
+
+        $merchantAttempt = $manager->transition(
+            SanctumScanExchange::findOrFail($exchangeId),
+            'payment_verified',
+            'merchant_api',
+            (int) $merchant->getKey(),
+            'A merchant cannot verify their own payment evidence.'
+        );
+        $this->assertFalse($merchantAttempt->ok);
+        $this->assertSame('invalid_settlement_transition', $merchantAttempt->error);
+
+        $this->assertSame(
+            'payment_evidence_submitted',
+            SanctumScanExchange::findOrFail($exchangeId)->settlement_status
+        );
+        $this->assertSame(1, $this->settlementEvents($exchangeId)->count());
+    }
+
+    public function test_manager_checks_evidence_amount_and_requires_buyer_receipt_before_settlement(): void
+    {
+        $merchant = $this->makeMerchant('evidence-guard-seller', 'Evidence Guard Seller');
+        $buyer = $this->makeBuyer('evidence-guard-buyer');
+        $admin = $this->makeAdmin('evidence-guard');
+        $exchangeId = $this->issueOffer($merchant, $buyer, $this->makeResource($merchant));
+        $this->acceptOffer($buyer, $exchangeId);
+        $this->submitEvidence($buyer, $exchangeId);
+
+        $manager = app(ExchangeSettlementManager::class);
+
+        // Bypass the immutable model hook only to simulate corrupt legacy data;
+        // application writes must never update a submitted evidence version.
+        DB::table('sanctum_scan_exchange_payment_evidence')
+            ->where('exchange_id', $exchangeId)
+            ->update(['amount' => '1.00000000']);
+
+        $mismatched = $manager->transition(
+            SanctumScanExchange::findOrFail($exchangeId),
+            'payment_verified',
+            'admin',
+            (int) $admin->getKey(),
+            'The submitted amount does not reconcile with the accepted offer.'
+        );
+        $this->assertFalse($mismatched->ok);
+        $this->assertSame('payment_evidence_mismatch', $mismatched->error);
+
+        DB::table('sanctum_scan_exchange_payment_evidence')
+            ->where('exchange_id', $exchangeId)
+            ->update(['amount' => '25000.00000000']);
+
+        $verified = $manager->transition(
+            SanctumScanExchange::findOrFail($exchangeId),
+            'payment_verified',
+            'admin',
+            (int) $admin->getKey(),
+            'The current evidence amount and currency reconcile with the accepted offer.'
+        );
+        $this->assertTrue($verified->ok);
+        $this->assertSame('payment_verified', $verified->exchange->settlement_status);
+
+        $settledWithoutReceipt = $manager->transition(
+            $verified->exchange,
+            'settled',
+            'admin',
+            (int) $admin->getKey(),
+            'Settlement cannot be recorded until buyer receipt is confirmed.'
+        );
+        $this->assertFalse($settledWithoutReceipt->ok);
+        $this->assertSame('buyer_receipt_required', $settledWithoutReceipt->error);
+        $this->assertSame(
+            'payment_verified',
+            SanctumScanExchange::findOrFail($exchangeId)->settlement_status
+        );
     }
 
     public function test_buyer_decline_cancels_settlement(): void
