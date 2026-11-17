@@ -1,7 +1,7 @@
 # Roadmap Status — QRPay / Sanctum Scan
 
 **Date:** 2026-11-17
-**Branch:** `main` with stacked, unmerged work through M024-A (PRs #25–#30)
+**Branch:** `main` with stacked, unmerged work through M025 (PRs #25–#32)
 **Method:** roadmap phases from [`README.md`](../README.md#13-development-roadmap) mapped to repository evidence per ADR 0017. A capability is only **Verified** when an executed test or command proves it; roadmap checkboxes are not evidence.
 
 **Last recorded local baseline (before M020–M024):** `composer check` → 96 tests, 1,049 assertions, 1 skipped (MySQL-only concurrency test), green on SQLite; G1, G2, G7, G8 green. Pint passed on all 32 PHP files in that earlier revision. The MySQL job's full step sequence was green locally on MySQL 9.4 (migrations, route:list 1,347 routes, backfill down/up, concurrency test). This historical baseline does not validate M020–M024 or M024-A.
@@ -47,14 +47,14 @@ Status vocabulary (ADR 0017): **Planned** · **In progress** · **Implemented** 
 
 | Roadmap item | Status | Evidence / gap |
 |---|---|---|
-| Select initial economic participants | Planned | No code |
-| Map an agricultural or merchant value chain | Planned | No code |
-| Test onboarding | Planned | Depends on CI/MySQL gates (R-02, R-10) |
+| Select initial economic participants | Planned | M025 defines seller, buyer, facilitator and reconciliation-operator roles; no named participants or commitments confirmed |
+| Map an agricultural or merchant value chain | In progress | M025 bounds an Irish-potato seller-to-buyer candidate in one Nakuru catchment; ward, market route and partner workflow still require field validation |
+| Test onboarding | Planned | M025 sets account/KYC/device/connectivity eligibility gates; no pilot participants enrolled |
 | Complete a verified exchange | In progress | Offer → acceptance → dispatch → receipt → unverified evidence → admin verify/settle is implemented and tested, including rejection-and-resubmission via versioned evidence; no funds or provider confirmation move |
 | Integrate an authorized payment provider | Planned | Deliberately outside M016; later milestone must not simulate provider settlement with a status write |
 | Test reconciliation | In progress | Manual admin verification with typed conflicts and versioned evidence history; no provider statement ingestion |
 | Evaluate dispute handling | Implemented | Bilateral disputes, private evidence review, independent attestations, appeals, reassessments |
-| Measure participant benefits | Planned | No instrumentation |
+| Measure participant benefits | Planned | M025 defines baseline and pilot metrics; baseline not collected and no outcome claimed |
 | Document findings | Planned | — |
 
 ## Phase IV — Cooperative and Economic Infrastructure
@@ -126,11 +126,24 @@ already records the cross-repository evidence and owner-side Settings/Support
 actions. Do not add more diagnostic workflows or keep retrying until those
 checks are completed.
 
-**Next implementation milestone after validation is restored: M025 — Pilot
-participant and value-chain scope.** It defines the pilot's participant/value-chain
-scope and outcome measures. M026 tracks a consistent-database-snapshot
-guarantee for M012 exports, which currently compose provenance context and
-evidence from separate reads.
+**M025 — Pilot participant and value-chain scope** is in progress on
+`sanctum-scan/m025-nakuru-potato-pilot-scope` (PR #32):
+[M025 scope and readiness record](M025-pilot-participant-and-value-chain-scope.md).
+The recommended discovery candidate is a small Irish-potato seller-to-buyer
+exchange pilot in one Nakuru County catchment. The scope maps participant roles
+to existing merchant/user/admin accounts, constrains the workflow to current
+exchange capabilities, and defines baseline metrics, manual controls, costs,
+privacy gates and go/no-go conditions. Partners are not confirmed, participant
+recruitment has not started, and no live pilot is authorised or claimed.
+
+The M025 scope work does not mark M024 or M024-A verified. No live transactions
+should begin until the M024/M024-A code and tests have passed required review
+and validation, actual participants have qualified, and the readiness gates in
+the M025 record are satisfied.
+
+**M026 — Consistent database snapshot for M012 provenance exports** remains a
+technical follow-up. M012 currently composes provenance context and evidence
+from separate reads, so concurrent updates can yield a mixed-time export.
 
 The M017 operational gate remains open: GitHub Actions must execute the gates
 successfully and branch protection must require them (R-02). Local success is
