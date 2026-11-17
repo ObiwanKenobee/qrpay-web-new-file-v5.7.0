@@ -2,6 +2,9 @@
 
 namespace Tests\Feature\SanctumScan;
 
+use App\Http\Middleware\Admin\SystemMaintenance;
+use App\Http\Middleware\Admin\SystemMaintenanceApi;
+use App\Http\Middleware\KycApi;
 use App\Models\Merchants\Merchant;
 use App\Models\SanctumScanProvenanceEvent;
 use App\Models\SanctumScanReference;
@@ -52,9 +55,9 @@ class EconomicResourceRegistryTest extends TestCase
         $eventMigration->up();
 
         $this->withoutMiddleware([
-            \App\Http\Middleware\Admin\SystemMaintenance::class,
-            \App\Http\Middleware\Admin\SystemMaintenanceApi::class,
-            \App\Http\Middleware\KycApi::class,
+            SystemMaintenance::class,
+            SystemMaintenanceApi::class,
+            KycApi::class,
         ]);
     }
 
@@ -64,7 +67,7 @@ class EconomicResourceRegistryTest extends TestCase
             'firstname' => 'Test',
             'lastname' => 'Merchant',
             'username' => $username,
-            'email' => $username . '@example.test',
+            'email' => $username.'@example.test',
             'password' => bcrypt('not-a-real-password'),
             'business_name' => $businessName,
             'status' => true,
@@ -130,19 +133,20 @@ class EconomicResourceRegistryTest extends TestCase
             ->assertSee('Merchant-declared information')
             ->assertSee('not independently verified');
 
-        $this->assertStringNotContainsString('250.0000', $page->getContent());
+        $page->assertSee('Declared quantity');
+        $this->assertStringContainsString('250.0000 kg', $page->getContent());
         $this->assertStringNotContainsString('rongai-produce@example.test', $page->getContent());
 
         $reference = SanctumScanReference::query()->firstOrFail();
-        $api = $this->getJson('/api/sanctum/v1/scan/' . $this->referenceFromUrl($scanUrl));
+        $api = $this->getJson('/api/sanctum/v1/scan/'.$this->referenceFromUrl($scanUrl));
 
         $api->assertOk()
             ->assertJsonPath('data.resource.type', 'agricultural_batch')
             ->assertJsonPath('data.resource.details.variety', 'Shangi')
             ->assertJsonPath('data.resource.details.origin', 'Rongai, Nakuru County')
+            ->assertJsonPath('data.resource.details.quantity', '250.0000')
+            ->assertJsonPath('data.resource.details.unit', 'kg')
             ->assertJsonPath('data.resource.provenance.status', 'merchant_declared');
-
-        $this->assertArrayNotHasKey('quantity', $api->json('data.resource.details'));
         $this->assertSame(hash('sha256', $this->referenceFromUrl($scanUrl)), $reference->reference_hash);
     }
 
@@ -226,7 +230,7 @@ class EconomicResourceRegistryTest extends TestCase
         $this->assertSame(30, SanctumScanResource::findOrFail($resourceId)->scan_expires_in_days);
 
         $rotated = $this->actingAs($merchant, 'merchant_api')
-            ->postJson('/merchant-api/merchant/sanctum/resources/' . $resourceId . '/scan-reference')
+            ->postJson('/merchant-api/merchant/sanctum/resources/'.$resourceId.'/scan-reference')
             ->assertCreated();
 
         $this->assertNotSame($oldUrl, $rotated->json('data.scan_url'));
@@ -252,7 +256,7 @@ class EconomicResourceRegistryTest extends TestCase
         $scanUrl = $created->json('data.scan_url');
 
         $this->actingAs($merchant, 'merchant_api')
-            ->deleteJson('/merchant-api/merchant/sanctum/resources/' . $resourceId)
+            ->deleteJson('/merchant-api/merchant/sanctum/resources/'.$resourceId)
             ->assertOk()
             ->assertJsonPath('data.status', 'archived');
 
@@ -297,11 +301,11 @@ class EconomicResourceRegistryTest extends TestCase
         ]);
 
         $this->actingAs($owner, 'merchant_api')
-            ->postJson('/merchant-api/merchant/sanctum/resources/' . $resource->getKey() . '/scan-reference')
+            ->postJson('/merchant-api/merchant/sanctum/resources/'.$resource->getKey().'/scan-reference')
             ->assertNotFound();
 
         $this->actingAs($owner, 'merchant_api')
-            ->deleteJson('/merchant-api/merchant/sanctum/resources/' . $resource->getKey())
+            ->deleteJson('/merchant-api/merchant/sanctum/resources/'.$resource->getKey())
             ->assertNotFound();
 
         $this->assertSame('published', $resource->fresh()->status);

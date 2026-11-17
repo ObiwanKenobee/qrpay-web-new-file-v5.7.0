@@ -2,20 +2,19 @@
 
 namespace Tests\Feature;
 
-// use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class ExampleTest extends TestCase
 {
     /**
-     * A basic test example.
-     *
-     * @return void
+     * Smoke test replacing the stock scaffold test, which assumed a seeded
+     * application database that the test suite does not provide.
      */
-    public function test_the_application_returns_a_successful_response()
+    public function test_the_application_boots_and_registers_the_public_scan_route(): void
     {
-        $response = $this->get('/');
-
-        $response->assertStatus(200);
+        $this->assertSame(
+            url('/scan/snc_example'),
+            route('sanctum.scan.public', ['reference' => 'snc_example'])
+        );
     }
 }

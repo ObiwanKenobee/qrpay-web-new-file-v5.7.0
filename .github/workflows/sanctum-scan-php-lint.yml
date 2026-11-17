@@ -1,26 +1,21 @@
-name: Sanctum Scan PHP lint and feature tests
+name: Verification gates (ADR 0016)
 
 on:
   push:
-    branches:
-      - 'sanctum-scan/**'
-    paths:
-      - '**/*.php'
-      - '.github/workflows/sanctum-scan-php-lint.yml'
   pull_request:
-    branches:
-      - main
-    paths:
-      - '**/*.php'
-      - '.github/workflows/sanctum-scan-php-lint.yml'
 
 permissions:
   contents: read
 
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  php-lint:
-    name: Lint PHP and run Sanctum Scan feature tests
+  gates:
+    name: G1 G2 G3 G7 G8 — static gates and full suite
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -30,58 +25,86 @@ jobs:
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.2'
           extensions: mbstring, sqlite3, pdo_sqlite
           coverage: none
 
-      - name: Lint changed PHP files
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Fetch base branch for changed-file detection
+        if: github.event_name == 'pull_request'
+        run: git fetch origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}" --depth=1
+
+      - name: Prepare application environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
+
+      - name: Run ADR 0016 gates
         env:
+          EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
           BASE_SHA: ${{ github.event.before }}
-          EVENT_NAME: ${{ github.event_name }}
-        shell: bash
-        run: |
-          if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF" --depth=1
-            DIFF_RANGE="origin/$BASE_REF...HEAD"
-          elif [[ "$BASE_SHA" =~ ^0{40}$ ]]; then
-            echo "Initial branch push detected; comparing with the default branch."
-            git fetch origin "main:refs/remotes/origin/main" --depth=1
-            DIFF_RANGE="origin/main...HEAD"
-          else
-            DIFF_RANGE="$BASE_SHA...HEAD"
-          fi
-
-          php_files_path="$RUNNER_TEMP/sanctum-scan-php-files"
-          if ! git diff --diff-filter=ACMRT --name-only -z "$DIFF_RANGE" -- '*.php' > "$php_files_path"; then
-            echo "Unable to determine changed PHP files for diff range: $DIFF_RANGE"
-            exit 1
-          fi
-
-          mapfile -d '' -t php_files < "$php_files_path"
-
-          if [[ ${#php_files[@]} -eq 0 ]]; then
-            echo "No changed PHP files to lint."
-            exit 0
-          fi
-
-          for file in "${php_files[@]}"; do
-            echo "Linting $file"
-            php -l "$file"
-          done
-
-      - name: Install Composer dependencies
-        env:
           APP_ENV: testing
           DB_CONNECTION: sqlite
           DB_DATABASE: ':memory:'
+          CACHE_DRIVER: array
+          QUEUE_CONNECTION: sync
+          SESSION_DRIVER: array
+        run: bash tools/verify.sh
+
+  mysql:
+    name: G4 G5 — MySQL migrations, route registry, concurrency
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: qrpay_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: qrpay_test
+      DB_USERNAME: root
+      DB_PASSWORD: root
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, pdo_mysql
+          coverage: none
+
+      - name: Install Composer dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
       - name: Prepare application environment
-        run: cp .env.example .env
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
 
-      - name: Prepare application key
-        run: php artisan key:generate --force
+      - name: Migrate from scratch
+        run: php artisan migrate:fresh --force
+
+      - name: Resolve route registry from a migrated database
+        run: php artisan route:list --json > /dev/null
 
       - name: Run offline provenance verifier unit tests
         env:
@@ -94,11 +117,17 @@ jobs:
         run: vendor/bin/phpunit tests/Feature/SanctumScan/ProvenanceManifestVerifierCommandTest.php
 
       - name: Run Sanctum Scan feature tests
+      - name: Roll the newest settlement migration down and up
+        run: |
+          php artisan migrate:rollback --force \
+            --path=database/migrations/2026_11_16_120000_backfill_settlement_status_for_closed_exchanges.php
+          php artisan migrate --force
+
+      - name: Run settlement concurrency test
         env:
+          SANCTUM_SETTLEMENT_CONCURRENCY: '1'
           APP_ENV: testing
-          DB_CONNECTION: sqlite
-          DB_DATABASE: ':memory:'
           CACHE_DRIVER: array
           QUEUE_CONNECTION: sync
           SESSION_DRIVER: array
-        run: vendor/bin/phpunit tests/Feature/SanctumScan/EconomicExchangeLifecycleTest.php
+        run: vendor/bin/phpunit tests/Feature/SanctumScan/SettlementConcurrencyTest.php
