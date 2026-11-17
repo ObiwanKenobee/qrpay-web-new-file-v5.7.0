@@ -104,8 +104,13 @@ migration now has an explicit preflight refusal before schema changes whenever
 non-initial or superseding evidence exists. Regression tests assert that the
 history and schema remain intact after refusal.
 
-**Next engineering priority: M024 — Permission-controlled operator
-reconciliation workflow.** M025 defines the pilot's participant/value-chain
+**M024 — Permission-controlled operator reconciliation workspace** is in progress on
+`sanctum-scan/m024-operator-reconciliation-workspace`:
+[M024 engineering record](M024-operator-reconciliation-workspace.md). The first
+slice is read-only: it joins exchange state, evidence versions, settlement
+decisions and dispute review history under the existing admin role/2FA stack.
+
+**Next engineering priority: M025 — Pilot participant and value-chain scope.** It defines the pilot's participant/value-chain
 scope and outcome measures. M026 tracks a consistent-database-snapshot
 guarantee for M012 exports, which currently compose provenance context and
 evidence from separate reads.
