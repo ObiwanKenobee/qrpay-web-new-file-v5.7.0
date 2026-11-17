@@ -2,7 +2,7 @@
 
 **Status:** Continuously reconciled feature map  
 **Date:** 2026-11-17  
-**Branch:** `main` at `e9cdf766`; M020 in progress on PR #25, M021 in progress on `sanctum-scan/m021-canonical-provenance-adrs`, and M022 in progress on `sanctum-scan/m022-genuine-settlement-concurrency`
+**Branch:** `main` at `e9cdf766`; M020 in progress on PR #25, M021 in progress on `sanctum-scan/m021-canonical-provenance-adrs`, M022 in progress on `sanctum-scan/m022-genuine-settlement-concurrency`, and M023 in progress on `sanctum-scan/m023-fail-safe-evidence-rollback`
 
 ## Status legend
 
@@ -129,10 +129,11 @@ All entries are **Implemented (static)** unless noted. Legacy features have no a
 | M016 | Payment settlement state machine | Implemented: typed transition table, actor-bound manager, atomic evidence submission, cancellation consistency and admin API; no fund movement | `SettlementStateMachineTest`, `SettlementLifecycleTest`, `SettlementBackfillMigrationTest`, MySQL-only two-worker `SettlementConcurrencyTest` | ADR 0016/0017, QODOR-002; GitHub CI execution still pending |
 | M017 | Deterministic verification gates | Implemented: G1/G2/G3/G4/G5/G7/G8 wired; G6 deferred | `composer check`, `RouteRegistryTest`, MySQL gate sequence | ADR 0016; GitHub Actions execution and branch protection pending |
 | M018 | Operator-surface hardening | Implemented: real admin middleware stack exercised; duplicate identity controller removed | `AdminOperatorMiddlewareTest` | M018 record; ADR 0012 contract aligned |
-| M019 | Settlement evidence versioning | Implemented: append-only version chain and buyer-only resubmission after rejection | `SettlementLifecycleTest`, `PaymentEvidenceVersioningMigrationTest` | ADR 0018; unsafe rollback after multiple versions remains a limitation |
+| M019 | Settlement evidence versioning | Implemented: append-only version chain and buyer-only resubmission after rejection | `SettlementLifecycleTest`, `PaymentEvidenceVersioningMigrationTest` | ADR 0018; M023 now guards rollback before any schema change if history is not representable by the original schema |
 | M020 | Evidence-version-bound settlement decisions | In progress on M020 branch: immutable decisions bind exact evidence ID/version/fingerprint | `SettlementLifecycleTest` assertions added; execution pending | ADR 0019; no schema migration required |
 | M021 | Canonical provenance ADR reconciliation | In progress: canonical ADRs 0020–0022 registered; legacy paths retained as compatibility pointers | Documentation/path review; no runtime code change | [M021 engineering record](docs/engineering/M021-canonical-provenance-adrs.md); [ADR index](docs/decisions/README.md) |
 | M022 | Genuine settlement concurrency | In progress: two independent PHP workers contend on one MySQL exchange-row lock and request opposite administrator decisions | MySQL-only `SettlementConcurrencyTest`; G4 workflow invokes the Sanctum Scan feature suite and dedicated concurrency test | [M022 engineering record](docs/engineering/M022-genuine-settlement-concurrency.md); no production state/schema change |
+| M023 | Fail-safe evidence rollback | In progress: versioning migration refuses downgrade before DDL if non-initial or superseding evidence exists | `PaymentEvidenceVersioningMigrationTest` covers safe version-1 rollback and refused rollback with intact rows, indexes and self-reference | [M023 engineering record](docs/engineering/M023-fail-safe-evidence-rollback.md); migration guard and tests |
 
 **Coupling fact:** M002–M020 Sanctum Scan services do not move funds and do not read/write legacy wallet or transaction tables. Preserve this boundary.
 
