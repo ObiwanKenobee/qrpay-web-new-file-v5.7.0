@@ -1,7 +1,7 @@
 # Roadmap Status — QRPay / Sanctum Scan
 
 **Date:** 2026-11-17
-**Branch:** `main` with M020 in progress on PR #25, M021 in progress on `sanctum-scan/m021-canonical-provenance-adrs`, and M022 in progress on `sanctum-scan/m022-genuine-settlement-concurrency`
+**Branch:** `main` with M020 in progress on PR #25, M021 in progress on `sanctum-scan/m021-canonical-provenance-adrs`, M022 in progress on `sanctum-scan/m022-genuine-settlement-concurrency`, and M023 in progress on `sanctum-scan/m023-fail-safe-evidence-rollback`
 **Method:** roadmap phases from [`README.md`](../README.md#13-development-roadmap) mapped to repository evidence per ADR 0017. A capability is only **Verified** when an executed test or command proves it; roadmap checkboxes are not evidence.
 
 **Current executed baseline:** `composer check` → 96 tests, 1,049 assertions, 1 skipped (MySQL-only concurrency test), green on SQLite; G1, G2, G7, G8 green. Pint passes on all 32 changed PHP files. The MySQL job's full step sequence is green locally on MySQL 9.4 (migrations, route:list 1,347 routes, backfill down/up, concurrency test); only the GitHub runner run is pending.
@@ -97,13 +97,18 @@ opposite administrator decisions. The test requires one committed winner, one
 now explicitly runs the Sanctum Scan feature suite before its dedicated
 concurrency test. CI execution remains pending.
 
-**Next engineering priority: M023 — Fail-safe rollback guard for payment
-evidence versioning.** It must refuse a rollback that would collapse or destroy
-an exchange's version history. M024 addresses the admin reconciliation
-interface; M025 defines the pilot's participant/value-chain scope and outcome
-measures. M026 tracks a consistent-database-snapshot guarantee for M012
-exports, which currently compose provenance context and evidence from separate
-reads.
+**M023 — Fail-safe payment-evidence rollback guard** is in progress on
+`sanctum-scan/m023-fail-safe-evidence-rollback`:
+[M023 engineering record](M023-fail-safe-evidence-rollback.md). The versioning
+migration now has an explicit preflight refusal before schema changes whenever
+non-initial or superseding evidence exists. Regression tests assert that the
+history and schema remain intact after refusal.
+
+**Next engineering priority: M024 — Permission-controlled operator
+reconciliation workflow.** M025 defines the pilot's participant/value-chain
+scope and outcome measures. M026 tracks a consistent-database-snapshot
+guarantee for M012 exports, which currently compose provenance context and
+evidence from separate reads.
 
 The M017 operational gate remains open: GitHub Actions must execute the gates
 successfully and branch protection must require them (R-02). Local success is

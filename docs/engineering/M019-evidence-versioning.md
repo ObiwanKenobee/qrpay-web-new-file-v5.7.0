@@ -128,9 +128,11 @@ the production contract was correct and unchanged.
 
 ## Limitations
 
-- `down()` cannot restore `unique(exchange_id)` once version 2 exists without
-  deleting history, so it fails in that case. Rollback is safe only before a
-  resubmission; this is recorded in ADR 0018.
+- M023 adds an explicit preflight guard to `down()`: rollback is refused
+  before schema changes if any row is not version 1 or has a predecessor link.
+  Tests assert the schema, indexes, self-reference and all evidence rows remain
+  unchanged after refusal. Rollback is safe only while the table contains
+  initial version-1 rows only; see [M023](M023-fail-safe-evidence-rollback.md).
 - Rejected settlement on an exchange that later closes remains rejected;
   cancellation does not rewrite it.
 - No provider statement ingestion, automatic matching, or funds movement.

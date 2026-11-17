@@ -86,11 +86,14 @@ then verify version *n*.
   that was rejected. `payment_evidence_history` makes the sequence explicit but
   does not itself bind a decision to a version; the settlement events record
   each decision and its timestamp.
-- The `down()` migration cannot restore the single-row constraint once version 2
-  exists without deleting history. It therefore fails rather than destroying
-  evidence; rollback is only safe before any resubmission. The successful
-  `down()` path is tested on SQLite; the failing path is a constraint
-  consequence and was not executed.
+- The `down()` migration first checks that every stored row is still an
+  initial version (`version = 1`) with no predecessor link. Any non-initial or
+  superseding row causes an explicit `RuntimeException` before the migration
+  changes a foreign key, index or column. The original one-row constraint is
+  therefore restored only while the existing data is representable by that
+  schema. A refused rollback leaves version history and the versioning schema
+  intact. Application writes must be quiesced during schema migration; the
+  preflight is not a lock against concurrent submissions.
 - A rejected settlement on an exchange that later closes stays `payment_rejected`.
   `cancelForClosedExchange` does not add a rejected → cancelled edge, so closing
   the exchange does not rewrite the rejection.
@@ -106,6 +109,7 @@ then verify version *n*.
   covers: rejection, direct-verification refusal, version-2 submission,
   preserved version-1 row, supersession link, admin history projection,
   resubmission event, and verification of version 2.
-- `PaymentEvidenceVersioningMigrationTest` asserts the composite unique key, the
-  removal of the single-column unique, and a successful `down()` before any
-  resubmission exists.
+- `PaymentEvidenceVersioningMigrationTest` asserts the composite unique key,
+  the removal of the single-column unique, successful rollback with preserved
+  version-1 evidence, and fail-closed rollback with unchanged multi-version
+  history, indexes and self-reference foreign key.
