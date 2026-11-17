@@ -5,6 +5,7 @@ namespace App\Services\SanctumScan;
 use App\Models\SanctumScanExchange;
 use App\Models\SanctumScanExchangeDispute;
 use App\Models\SanctumScanExchangeDisputeEvidence;
+use App\Models\SanctumScanExchangeEvent;
 use App\Models\SanctumScanExchangeEvidenceReview;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -303,6 +304,98 @@ class DisputeEvidenceManager
                 'Cache-Control' => 'private, no-store',
             ]
         );
+    }
+
+
+    /**
+     * Build a participant-scoped, privacy-filtered provenance snapshot.
+     *
+     * Raw evidence files, storage keys, payment references and internal actor IDs
+     * are deliberately excluded from this export.
+     */
+    public function provenanceContextForParticipant(
+        int $exchangeId,
+        string $actorGuard,
+        int $actorId
+    ): array {
+        $exchange = $this->participantExchange($exchangeId, $actorGuard, $actorId);
+        $dispute = SanctumScanExchangeDispute::query()
+            ->where('exchange_id', $exchange->getKey())
+            ->firstOrFail();
+
+        $messages = $dispute->messages()
+            ->orderBy('id')
+            ->get()
+            ->map(fn ($message) => [
+                'id' => $message->getKey(),
+                'type' => $message->message_type,
+                'actor_type' => match ($message->recorded_by_guard) {
+                    'api' => 'authenticated_user',
+                    'merchant_api' => 'merchant_account',
+                    'admin' => 'platform_administrator',
+                    'system' => 'system',
+                    default => 'service',
+                },
+                'body' => $message->body,
+                'recorded_at' => $message->created_at?->toIso8601String(),
+            ])
+            ->values()
+            ->all();
+
+        $events = SanctumScanExchangeEvent::query()
+            ->where('exchange_id', $exchange->getKey())
+            ->orderBy('id')
+            ->get()
+            ->map(fn (SanctumScanExchangeEvent $event) => [
+                'id' => $event->getKey(),
+                'type' => $event->event_type,
+                'description' => $event->description,
+                'verification_status' => $event->verification_status,
+                'actor_type' => match ($event->recorded_by_guard) {
+                    'api' => 'authenticated_user',
+                    'merchant_api' => 'merchant_account',
+                    'admin' => 'platform_administrator',
+                    'system' => 'system',
+                    default => 'service',
+                },
+                'recorded_at' => ($event->occurred_at ?? $event->created_at)?->toIso8601String(),
+            ])
+            ->values()
+            ->all();
+
+        return [
+            'exchange' => [
+                'id' => $exchange->getKey(),
+                'status' => $exchange->status,
+                'resource' => [
+                    'type' => $exchange->resource_type,
+                    'name' => $exchange->resource_name_snapshot,
+                    'reference_code' => $exchange->resource_reference_snapshot,
+                ],
+                'quantity' => (string) $exchange->quantity,
+                'unit' => $exchange->unit,
+                'amount' => (string) $exchange->amount,
+                'currency' => $exchange->currency,
+                'terms' => $exchange->terms,
+                'expires_at' => $exchange->expires_at?->toIso8601String(),
+                'accepted_at' => $exchange->accepted_at?->toIso8601String(),
+                'dispatched_at' => $exchange->dispatched_at?->toIso8601String(),
+                'received_at' => $exchange->received_at?->toIso8601String(),
+                'created_at' => $exchange->created_at?->toIso8601String(),
+            ],
+            'dispute' => [
+                'id' => $dispute->getKey(),
+                'category' => $dispute->category,
+                'status' => $dispute->status,
+                'resolution_summary' => $dispute->resolution_summary,
+                'opened_at' => $dispute->opened_at?->toIso8601String(),
+                'resolution_proposed_at' => $dispute->resolution_proposed_at?->toIso8601String(),
+                'resolved_at' => $dispute->resolved_at?->toIso8601String(),
+                'withdrawn_at' => $dispute->withdrawn_at?->toIso8601String(),
+                'messages' => $messages,
+            ],
+            'events' => $events,
+        ];
     }
 
     private function participantExchange(

@@ -106,6 +106,17 @@ jobs:
       - name: Resolve route registry from a migrated database
         run: php artisan route:list --json > /dev/null
 
+      - name: Run offline provenance verifier unit tests
+        env:
+          APP_ENV: testing
+        run: vendor/bin/phpunit tests/Unit/SanctumScan/ProvenanceManifestVerifierTest.php
+
+      - name: Run offline provenance verifier command tests
+        env:
+          APP_ENV: testing
+        run: vendor/bin/phpunit tests/Feature/SanctumScan/ProvenanceManifestVerifierCommandTest.php
+
+      - name: Run Sanctum Scan feature tests
       - name: Roll the newest settlement migration down and up
         run: |
           php artisan migrate:rollback --force \

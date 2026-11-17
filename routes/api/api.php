@@ -228,6 +228,12 @@ Route::prefix('user')->group(function(){
                 ->whereNumber('exchangeId')
                 ->name('api.user.sanctum.exchanges.dispute.withdraw');
 
+
+            Route::get('sanctum/exchanges/{exchangeId}/dispute/evidence/provenance', [SanctumScanDisputeEvidenceController::class, 'provenanceExport'])
+                ->whereNumber('exchangeId')
+                ->name('api.user.sanctum.exchanges.dispute.evidence.provenance')
+                ->middleware('throttle:10,1');
+
             Route::get('sanctum/exchanges/{exchangeId}/dispute/evidence', [SanctumScanDisputeEvidenceController::class, 'index'])
                 ->whereNumber('exchangeId')
                 ->name('api.user.sanctum.exchanges.dispute.evidence.index');
