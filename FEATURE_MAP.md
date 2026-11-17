@@ -2,7 +2,7 @@
 
 **Status:** Continuously reconciled feature map  
 **Date:** 2026-11-17  
-**Branch:** `main` at `e9cdf766`; M020 in progress on PR #25 and M021 in progress on `sanctum-scan/m021-canonical-provenance-adrs`
+**Branch:** `main` at `e9cdf766`; M020 in progress on PR #25, M021 in progress on `sanctum-scan/m021-canonical-provenance-adrs`, and M022 in progress on `sanctum-scan/m022-genuine-settlement-concurrency`
 
 ## Status legend
 
@@ -126,12 +126,13 @@ All entries are **Implemented (static)** unless noted. Legacy features have no a
 | M013 | Offline provenance manifest verifier | Implemented: bounded offline Artisan verifier for schema 1.0.0 manifests | `ProvenanceManifestVerifierTest`, `ProvenanceManifestVerifierCommandTest` | [ADR 0021](docs/decisions/0021-offline-provenance-manifest-verification.md); offline verifier guide; command `sanctum-scan:verify-provenance` |
 | M014 | Provenance verifier hardening | Implemented: structural, digest, revision and reassessment consistency checks | `ProvenanceManifestVerifierTest` | [ADR 0022](docs/decisions/0022-provenance-verifier-consistency-hardening.md) |
 | M015 | Manual buyer identity review + optional gate | Implemented: append-only admin review and optional acceptance prerequisite | `EconomicExchangeLifecycleTest` identity scenarios; `AdminOperatorMiddlewareTest` production-stack coverage | ADR 0012/0015 and API guide; implemented denial contract is 403 |
-| M016 | Payment settlement state machine | Implemented: typed transition table, actor-bound manager, atomic evidence submission, cancellation consistency and admin API; no fund movement | `SettlementStateMachineTest`, `SettlementLifecycleTest`, `SettlementBackfillMigrationTest`, MySQL-only `SettlementConcurrencyTest` | ADR 0016/0017, QODOR-002; GitHub CI execution still pending |
+| M016 | Payment settlement state machine | Implemented: typed transition table, actor-bound manager, atomic evidence submission, cancellation consistency and admin API; no fund movement | `SettlementStateMachineTest`, `SettlementLifecycleTest`, `SettlementBackfillMigrationTest`, MySQL-only two-worker `SettlementConcurrencyTest` | ADR 0016/0017, QODOR-002; GitHub CI execution still pending |
 | M017 | Deterministic verification gates | Implemented: G1/G2/G3/G4/G5/G7/G8 wired; G6 deferred | `composer check`, `RouteRegistryTest`, MySQL gate sequence | ADR 0016; GitHub Actions execution and branch protection pending |
 | M018 | Operator-surface hardening | Implemented: real admin middleware stack exercised; duplicate identity controller removed | `AdminOperatorMiddlewareTest` | M018 record; ADR 0012 contract aligned |
 | M019 | Settlement evidence versioning | Implemented: append-only version chain and buyer-only resubmission after rejection | `SettlementLifecycleTest`, `PaymentEvidenceVersioningMigrationTest` | ADR 0018; unsafe rollback after multiple versions remains a limitation |
 | M020 | Evidence-version-bound settlement decisions | In progress on M020 branch: immutable decisions bind exact evidence ID/version/fingerprint | `SettlementLifecycleTest` assertions added; execution pending | ADR 0019; no schema migration required |
 | M021 | Canonical provenance ADR reconciliation | In progress: canonical ADRs 0020–0022 registered; legacy paths retained as compatibility pointers | Documentation/path review; no runtime code change | [M021 engineering record](docs/engineering/M021-canonical-provenance-adrs.md); [ADR index](docs/decisions/README.md) |
+| M022 | Genuine settlement concurrency | In progress: two independent PHP workers contend on one MySQL exchange-row lock and request opposite administrator decisions | MySQL-only `SettlementConcurrencyTest`; G4 workflow invokes the Sanctum Scan feature suite and dedicated concurrency test | [M022 engineering record](docs/engineering/M022-genuine-settlement-concurrency.md); no production state/schema change |
 
 **Coupling fact:** M002–M020 Sanctum Scan services do not move funds and do not read/write legacy wallet or transaction tables. Preserve this boundary.
 
@@ -228,7 +229,7 @@ There is no documented server-to-server merchant settlement webhook in the QR ga
 | Merchant reference lifecycle | [`MerchantScanReferenceLifecycleTest.php`](tests/Feature/SanctumScan/MerchantScanReferenceLifecycleTest.php) | No admin/ops lifecycle tests |
 | Economic resource registry | [`EconomicResourceRegistryTest.php`](tests/Feature/SanctumScan/EconomicResourceRegistryTest.php) | No QR image generation test; no public page rendering test |
 | Exchange/dispute/evidence/verification/identity | [`EconomicExchangeLifecycleTest.php`](tests/Feature/SanctumScan/EconomicExchangeLifecycleTest.php) | Domain lifecycle and governance coverage; manager-level concurrency coverage remains a separate M022 task |
-| Settlement | [`SettlementStateMachineTest.php`](tests/Unit/SanctumScan/SettlementStateMachineTest.php), [`SettlementLifecycleTest.php`](tests/Feature/SanctumScan/SettlementLifecycleTest.php), [`SettlementBackfillMigrationTest.php`](tests/Feature/SanctumScan/SettlementBackfillMigrationTest.php), [`SettlementConcurrencyTest.php`](tests/Feature/SanctumScan/SettlementConcurrencyTest.php) | MySQL test currently proves lock contention and stale expected-status handling sequentially; simultaneous competing manager transitions are still M022. It is skipped outside MySQL. |
+| Settlement | [`SettlementStateMachineTest.php`](tests/Unit/SanctumScan/SettlementStateMachineTest.php), [`SettlementLifecycleTest.php`](tests/Feature/SanctumScan/SettlementLifecycleTest.php), [`SettlementBackfillMigrationTest.php`](tests/Feature/SanctumScan/SettlementBackfillMigrationTest.php), [`SettlementConcurrencyTest.php`](tests/Feature/SanctumScan/SettlementConcurrencyTest.php) | Separate PHP workers on independent MySQL sessions reach the same exchange-row lock before it is released; the test asserts one verified/rejected winner, one stale loser and one matching immutable event. It is skipped outside MySQL. |
 | Environment template | [`EnvironmentTemplateSecurityTest.php`](tests/Feature/EnvironmentTemplateSecurityTest.php) | Does not boot the full app in the current revision |
 | Legacy commerce | None | Entire legacy surface untested |
 | Webhooks | None | Signature/authorization tests absent |
