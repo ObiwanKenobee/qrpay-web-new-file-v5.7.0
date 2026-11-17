@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\SanctumScanVerifierMembership;
 use App\Models\SanctumScanAttestationRevision;
+use App\Models\SanctumScanVerifierMembership;
 use App\Services\SanctumScan\IndependentVerificationManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -71,7 +71,9 @@ class SanctumScanIndependentVerificationController extends Controller
             (int) $user->getKey()
         );
 
-        return is_string($result) ? $this->error($result) : $result;
+        return is_string($result)
+            ? $this->error($result, in_array($result, ['verifier_conflict_of_interest', 'conflict_declaration_required'], true) ? 403 : null)
+            : $result;
     }
 
     public function attest(
@@ -261,6 +263,7 @@ class SanctumScanIndependentVerificationController extends Controller
                     'attestation_id' => $revision->attestation_id,
                     'evidence_id' => $revision->evidence_id,
                     'version_number' => $revision->version_number,
+                    'previous_revision_id' => $revision->previous_revision_id,
                     'revision_action' => $revision->revision_action,
                     'verification_scope' => $revision->verification_scope,
                     'verification_method' => $revision->verification_method,
@@ -346,7 +349,7 @@ class SanctumScanIndependentVerificationController extends Controller
         ]);
     }
 
-    private function error(string $code): JsonResponse
+    private function error(string $code, ?int $statusOverride = null): JsonResponse
     {
         [$status, $message] = match ($code) {
             'invitation_unavailable' => [409, 'This invitation is no longer pending.'],
@@ -380,6 +383,6 @@ class SanctumScanIndependentVerificationController extends Controller
                 'code' => $code,
                 'message' => $message,
             ],
-        ], $status);
+        ], $statusOverride ?? $status);
     }
 }

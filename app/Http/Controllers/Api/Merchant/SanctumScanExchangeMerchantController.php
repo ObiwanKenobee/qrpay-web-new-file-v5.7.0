@@ -3,12 +3,11 @@
 namespace App\Http\Controllers\Api\Merchant;
 
 use App\Http\Controllers\Controller;
-use App\Models\Merchants\Merchant;
 use App\Models\SanctumScanExchange;
-use App\Models\SanctumScanExchangePaymentEvidence;
 use App\Models\SanctumScanResource;
 use App\Models\User;
 use App\Services\SanctumScan\ExchangeEventRecorder;
+use App\Services\SanctumScan\ExchangeSettlementManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -174,7 +173,7 @@ class SanctumScanExchangeMerchantController extends Controller
         ], 201);
     }
 
-    public function dispatch(
+    public function dispatchExchange(
         Request $request,
         int $exchangeId,
         ExchangeEventRecorder $events
@@ -239,11 +238,12 @@ class SanctumScanExchangeMerchantController extends Controller
     public function cancel(
         Request $request,
         int $exchangeId,
-        ExchangeEventRecorder $events
+        ExchangeEventRecorder $events,
+        ExchangeSettlementManager $settlement
     ): JsonResponse {
         $merchant = $request->user('merchant_api');
 
-        $exchange = DB::transaction(function () use ($merchant, $exchangeId, $events) {
+        $exchange = DB::transaction(function () use ($merchant, $exchangeId, $events, $settlement) {
             $exchange = SanctumScanExchange::query()
                 ->whereKey($exchangeId)
                 ->where('merchant_id', $merchant->getKey())
@@ -266,6 +266,8 @@ class SanctumScanExchangeMerchantController extends Controller
                     'system_recorded'
                 );
 
+                $settlement->cancelForClosedExchange($exchange, 'system', 0, 'expired');
+
                 return 'expired';
             }
 
@@ -282,6 +284,8 @@ class SanctumScanExchangeMerchantController extends Controller
                 (int) $merchant->getKey(),
                 'merchant_declared'
             );
+
+            $settlement->cancelForClosedExchange($exchange, 'merchant_api', (int) $merchant->getKey(), 'cancelled');
 
             return $exchange->fresh(['buyer:id,username', 'paymentEvidence', 'events']);
         });
@@ -337,11 +341,14 @@ class SanctumScanExchangeMerchantController extends Controller
             'currency' => $exchange->currency,
             'terms' => $exchange->terms,
             'status' => $status,
+            'settlement_status' => $exchange->settlement_status,
+            'settlement_status_updated_at' => $exchange->settlement_status_updated_at?->toIso8601String(),
             'expires_at' => $exchange->expires_at?->toIso8601String(),
             'accepted_at' => $exchange->accepted_at?->toIso8601String(),
             'dispatched_at' => $exchange->dispatched_at?->toIso8601String(),
             'received_at' => $exchange->received_at?->toIso8601String(),
             'payment_evidence' => $evidence ? [
+                'version' => $evidence->version,
                 'rail' => $evidence->rail,
                 'reference' => $evidence->reference,
                 'amount' => (string) $evidence->amount,

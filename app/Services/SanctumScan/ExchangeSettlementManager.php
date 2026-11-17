@@ -7,91 +7,149 @@ use Illuminate\Support\Facades\DB;
 
 class ExchangeSettlementManager
 {
-    // Valid settlement statuses in lifecycle order.
-    public const STATUSES = [
-        'awaiting_payment',
-        'payment_evidence_submitted',
-        'payment_verified',
-        'payment_rejected',
-        'settled',
-        'cancelled',
-    ];
-
-    // Transitions an admin may drive manually.
-    // Key = current status, value = allowed next statuses.
-    private const ADMIN_TRANSITIONS = [
-        'payment_evidence_submitted' => ['payment_verified', 'payment_rejected'],
-        'payment_verified'           => ['settled'],
-        'payment_rejected'           => ['payment_evidence_submitted'], // allow resubmission path
-    ];
-
     public function __construct(private readonly ExchangeEventRecorder $events) {}
 
     /**
-     * Called automatically when a buyer submits payment evidence (M005).
-     * Transitions awaiting_payment → payment_evidence_submitted.
-     */
-    public function onPaymentEvidenceSubmitted(SanctumScanExchange $exchange): void
-    {
-        if ($exchange->settlement_status !== 'awaiting_payment') {
-            return;
-        }
-
-        $this->transition($exchange, 'payment_evidence_submitted', 'system', 0, 'system_recorded');
-    }
-
-    /**
-     * Admin-driven transition. Returns the updated exchange or an error string.
+     * Administrator-driven transition. Returns a typed result so callers can
+     * distinguish an illegal transition from an authorisation failure.
      */
     public function transition(
         SanctumScanExchange $exchange,
         string $toStatus,
         string $actorGuard,
         int $actorId,
-        string $verificationStatus = 'platform_verified'
-    ): SanctumScanExchange|string {
-        return DB::transaction(function () use ($exchange, $toStatus, $actorGuard, $actorId, $verificationStatus) {
-            $exchange = SanctumScanExchange::query()
+        string $reason,
+        ?string $expectedFrom = null
+    ): SettlementTransitionResult {
+        if (! SettlementStateMachine::isStatus($toStatus)) {
+            return SettlementTransitionResult::failure('unknown_settlement_status');
+        }
+
+        return DB::transaction(function () use (
+            $exchange,
+            $toStatus,
+            $actorGuard,
+            $actorId,
+            $reason,
+            $expectedFrom
+        ) {
+            $locked = SanctumScanExchange::query()
                 ->whereKey($exchange->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $allowed = self::ADMIN_TRANSITIONS[$exchange->settlement_status] ?? [];
-
-            if (! in_array($toStatus, $allowed, true) && $actorGuard !== 'system') {
-                return 'invalid_settlement_transition';
+            if ($expectedFrom !== null && $locked->settlement_status !== $expectedFrom) {
+                return SettlementTransitionResult::failure(
+                    'stale_expected_status',
+                    $locked->settlement_status,
+                    $toStatus
+                );
             }
 
-            $from = $exchange->settlement_status;
-
-            $exchange->forceFill([
-                'settlement_status'            => $toStatus,
-                'settlement_status_updated_at' => now(),
-            ])->save();
-
-            $this->events->record(
-                $exchange,
-                'settlement_status_changed',
-                "Settlement status changed from {$from} to {$toStatus}.",
-                $actorGuard,
-                $actorId,
-                $verificationStatus,
-                ['from' => $from, 'to' => $toStatus]
-            );
-
-            return $exchange->fresh();
+            return $this->applyTransition($locked, $toStatus, $actorGuard, $actorId, $reason);
         });
     }
 
     /**
-     * Transition to cancelled — available when exchange is cancelled.
+     * Called inside the buyer's existing locked transaction after payment
+     * evidence has been persisted. Performs no additional locking.
      */
-    public function cancel(SanctumScanExchange $exchange, string $actorGuard, int $actorId): void
-    {
-        if ($exchange->settlement_status === 'cancelled') {
-            return;
+    public function recordEvidenceSubmitted(
+        SanctumScanExchange $lockedExchange,
+        int $buyerId
+    ): SettlementTransitionResult {
+        return $this->applyTransition(
+            $lockedExchange,
+            SettlementStateMachine::EVIDENCE_SUBMITTED,
+            'api',
+            $buyerId,
+            'Payment evidence was submitted by the buyer.'
+        );
+    }
+
+    /**
+     * Keeps settlement state consistent when an exchange is closed before any
+     * payment verification. A verified or settled payment is never cancelled
+     * by this method.
+     */
+    public function cancelForClosedExchange(
+        SanctumScanExchange $lockedExchange,
+        string $actorGuard,
+        int $actorId,
+        string $exchangeStatus
+    ): SettlementTransitionResult {
+        $current = $lockedExchange->settlement_status;
+
+        if ($current === SettlementStateMachine::CANCELLED) {
+            return SettlementTransitionResult::success($lockedExchange, $current, $current);
         }
 
-        $this->transition($exchange, 'cancelled', $actorGuard, $actorId, 'system_recorded');
+        if (in_array($current, [SettlementStateMachine::VERIFIED, SettlementStateMachine::SETTLED], true)) {
+            return SettlementTransitionResult::failure('settlement_already_verified', $current);
+        }
+
+        return $this->applyTransition(
+            $lockedExchange,
+            SettlementStateMachine::CANCELLED,
+            $actorGuard,
+            $actorId,
+            "Exchange closed with status [{$exchangeStatus}]."
+        );
+    }
+
+    /**
+     * Assumes the caller holds the row lock and transaction.
+     */
+    private function applyTransition(
+        SanctumScanExchange $exchange,
+        string $toStatus,
+        string $actorGuard,
+        int $actorId,
+        string $reason
+    ): SettlementTransitionResult {
+        $fromStatus = $exchange->settlement_status;
+
+        if (! SettlementStateMachine::isStatus($fromStatus)) {
+            return SettlementTransitionResult::failure('unknown_settlement_status', $fromStatus, $toStatus);
+        }
+
+        if ($fromStatus === $toStatus) {
+            return SettlementTransitionResult::failure('already_in_state', $fromStatus, $toStatus);
+        }
+
+        if (! SettlementStateMachine::canTransition($fromStatus, $toStatus, $actorGuard)) {
+            return SettlementTransitionResult::failure('invalid_settlement_transition', $fromStatus, $toStatus);
+        }
+
+        $exchange->forceFill([
+            'settlement_status' => $toStatus,
+            'settlement_status_updated_at' => now(),
+        ])->save();
+
+        $this->events->record(
+            $exchange,
+            'settlement_status_changed',
+            "Settlement status changed from {$fromStatus} to {$toStatus}. {$reason}",
+            $actorGuard,
+            $actorId,
+            $this->verificationStatusFor($actorGuard),
+            [
+                'from' => $fromStatus,
+                'to' => $toStatus,
+                'reason' => $reason,
+            ]
+        );
+
+        return SettlementTransitionResult::success($exchange, $fromStatus, $toStatus);
+    }
+
+    private function verificationStatusFor(string $actorGuard): string
+    {
+        return match ($actorGuard) {
+            'admin' => 'platform_verified',
+            'api' => 'buyer_declared',
+            'merchant_api' => 'merchant_declared',
+            default => 'system_recorded',
+        };
     }
 }

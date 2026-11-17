@@ -1,6 +1,6 @@
 # ADR 0017 — Settlement Slice and Evidence-Based Milestone Status
 
-**Status:** Proposed
+**Status:** Accepted (2026-11-16)
 **Date:** 2026-11-16
 
 ## Context
@@ -75,9 +75,15 @@ The authoritative matrix for this slice:
 | `payment_evidence_submitted` | `payment_rejected` | authenticated administrator |
 | `payment_evidence_submitted` | `cancelled` | exchange cancellation/dispute path, only while no verified payment exists |
 | `payment_verified` | `settled` | authenticated administrator |
-| `payment_rejected` | terminal | — |
+| `payment_rejected` | terminal *(superseded by ADR 0018)* | — |
 | `settled` | terminal | — |
 | `cancelled` | terminal | — |
+
+**Amendment 2026-11-16 (ADR 0018):** the `payment_rejected` row is superseded.
+Evidence is now append-only and versioned, and the buyer may resubmit after a
+rejection, which reopens verification. See
+[`0018-payment-evidence-versioning.md`](0018-payment-evidence-versioning.md).
+Everything else in this matrix remains authoritative.
 
 Rules that follow:
 
@@ -93,7 +99,8 @@ Rules that follow:
   Allowing resubmission would require a new evidence row per attempt, a
   supersession link, and a rule for which evidence the administrator reviewed.
   That is a separate ADR. Until then, a rejected exchange is not resubmitted;
-  it is closed.
+  it is closed. *(Superseded 2026-11-16 by ADR 0018: versioning now exists and
+  rejection is a resting state.)*
 - `payment_verified` may not transition to `cancelled` in this slice. A
   verified payment that later fails belongs to dispute/refund handling, which
   is out of scope and must not be simulated by a status write.
@@ -143,7 +150,8 @@ QODOR-002 is not complete until:
   and the API documentation.
 - Making `payment_rejected` terminal is a deliberate narrowing of the orphaned
   manager's intent. It removes a false affordance rather than preserving an
-  unimplementable transition.
+  unimplementable transition. *(Reversed by ADR 0018 once evidence versioning
+  made resubmission implementable.)*
 - Existing rows receive a backfilled settlement status; the backfill must be
   reversible and tested.
 - Because the manager currently has no callers, wiring it in changes buyer
@@ -164,3 +172,29 @@ QODOR-002 is not complete until:
   single winner and a single event.
 - The migration test proves `up`, `down`, and the backfill on MySQL.
 - CI runs the gates defined in ADR 0016 for the pull request.
+
+## Implementation status (2026-11-16)
+
+Implemented on `feature/qrpay-update`:
+
+- `SettlementStateMachine`, `SettlementTransitionResult`, rewritten
+  `ExchangeSettlementManager`, buyer evidence wiring, closed-exchange
+  consistency, admin controller/routes, participant projections, and the
+  reversible backfill migration.
+- `SettlementStateMachineTest` (10 tests / 295 assertions), `SettlementLifecycleTest`
+  (9 tests), `SettlementBackfillMigrationTest` (1 test), `RouteRegistryTest`, and a
+  MySQL-gated `SettlementConcurrencyTest`.
+- Full suite: `composer check` → 94 tests, 1,017 assertions, 1 skipped (MySQL
+  concurrency), green on SQLite; G1, G2, G7, G8 green. Pint passes on all 30
+  changed PHP files. The CI workflow is wired but has not executed on GitHub.
+- Operator middleware: `AdminOperatorMiddlewareTest` exercises the production
+  admin stack (role guard, app mode, 2FA) and passes (M018).
+- Evidence versioning: rejection can be reopened by a buyer's new evidence
+  version, without rewriting history (M019, ADR 0018).
+
+Resolved since the first draft: the MySQL job and its migration `up/down` step
+are wired (unexecuted); ADR 0012 records the implemented 403 contract; the
+superseded `SanctumScanUserIdentityController` is deleted. The remaining
+acceptance gap is CI/MySQL execution.
+- Fourteen pre-existing legacy route names are duplicated and block a global
+  uniqueness gate.

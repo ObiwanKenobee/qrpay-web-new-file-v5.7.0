@@ -119,8 +119,8 @@ All entries are **Implemented (static)** unless noted. Legacy features have no a
 | M012 | Participant-scoped provenance export | **Docs only on this branch** | None | Roadmap/README claim implemented on a dependent branch |
 | M013 | Offline provenance manifest verifier | **Docs only on this branch** | None | Roadmap/README claim implemented on a dependent branch |
 | M014 | Provenance verifier hardening | **Docs only on this branch** | None | Roadmap claim; ADR 0014 missing |
-| M015 | Manual buyer identity review + optional gate | Implemented (static) but with duplicate admin implementations | `EconomicExchangeLifecycleTest` identity scenarios | ADR 0012, ADR 0015, API guide; inconsistent status code |
-| M016 | Payment settlement state machine | **Partial**: migration + orphan service; no caller/route/test | None | Roadmap says not started |
+| M015 | Manual buyer identity review + optional gate | Implemented (static); duplicate route registration removed, superseded controller remains unreferenced | `EconomicExchangeLifecycleTest` identity scenarios | ADR 0012, ADR 0015, API guide; inconsistent status code |
+| M016 | Payment settlement state machine | Implemented and verified (no fund movement): typed table-driven service, buyer evidence transition, closed-exchange consistency, admin show/transition API, participant projections | `SettlementStateMachineTest` (10), `SettlementLifecycleTest` (9), `SettlementBackfillMigrationTest` (1), MySQL concurrency test (skipped outside MySQL) | ADR 0016, ADR 0017, `QODOR-002-plan.md` |
 
 **Coupling fact:** M002–M015 services do not move funds and do not read/write legacy wallet or transaction tables. Preserve this boundary.
 
@@ -171,7 +171,8 @@ There is no documented server-to-server merchant settlement webhook in the QR ga
 4. Merchant dispatches after acceptance.
 5. Buyer confirms receipt after dispatch.
 6. Buyer submits one payment reference (rail, reference, amount, currency). It must match the agreed amount/currency and remains unverified.
-7. Settlement is **not** part of M005; M016 is incomplete.
+7. Submitting the reference advances settlement `awaiting_payment -> payment_evidence_submitted` in the same transaction. An administrator may then verify/reject the evidence and record settlement; no step moves funds.
+8. Declining, cancelling, or expiring an exchange before verification cancels settlement. Buyer and merchant responses expose the settlement status; public scan payloads do not.
 
 ### 3.6 Dispute and verification
 
@@ -204,7 +205,7 @@ There is no documented server-to-server merchant settlement webhook in the QR ga
 | Mandate | `active -> revoked/completed` | Service + admin actions |
 | Attestation revision | `version 1 -> correction/withdrawal versions`; revoked terminal | Unique chain indexes + service checks |
 | Identity review | Append-only verdicts; current projection on `users` | Service transaction + user lock |
-| Settlement | `awaiting_payment -> payment_evidence_submitted -> payment_verified/payment_rejected`; `payment_verified -> settled`; `payment_rejected -> payment_evidence_submitted`; `-> cancelled` | Orphan service; not wired; cancel path broken |
+| Settlement | `awaiting_payment -> payment_evidence_submitted` (api/system); `-> cancelled` (api/merchant_api/system); `payment_evidence_submitted -> payment_verified` or `payment_rejected` (admin only); `-> cancelled` (api/merchant_api/system); `payment_verified -> settled` (admin only); `payment_rejected -> payment_evidence_submitted` (api only, new evidence version); settled/cancelled terminal | `SettlementStateMachine` transition table enforced by `ExchangeSettlementManager`; every transition appends exactly one `settlement_status_changed` event; evidence rows are append-only versions (`version`, `supersedes_id`); no money movement |
 
 ---
 
@@ -215,12 +216,13 @@ There is no documented server-to-server merchant settlement webhook in the QR ga
 | Scan reference resolution | [`ScanReferenceResolutionTest.php`](tests/Feature/SanctumScan/ScanReferenceResolutionTest.php) | No HTTP contract test; no malformed/hash timing tests |
 | Merchant reference lifecycle | [`MerchantScanReferenceLifecycleTest.php`](tests/Feature/SanctumScan/MerchantScanReferenceLifecycleTest.php) | No admin/ops lifecycle tests |
 | Economic resource registry | [`EconomicResourceRegistryTest.php`](tests/Feature/SanctumScan/EconomicResourceRegistryTest.php) | No QR image generation test; no public page rendering test |
-| Exchange/dispute/evidence/verification/identity | [`EconomicExchangeLifecycleTest.php`](tests/Feature/SanctumScan/EconomicExchangeLifecycleTest.php) (35 methods) | No settlement; no concurrency; no admin role/2FA tests; no state-machine exhaustive matrix |
+| Exchange/dispute/evidence/verification/identity | [`EconomicExchangeLifecycleTest.php`](tests/Feature/SanctumScan/EconomicExchangeLifecycleTest.php) (35 methods) | No concurrency; no admin role/2FA tests |
+| Settlement | [`SettlementStateMachineTest.php`](tests/Unit/SanctumScan/SettlementStateMachineTest.php), [`SettlementLifecycleTest.php`](tests/Feature/SanctumScan/SettlementLifecycleTest.php), [`SettlementBackfillMigrationTest.php`](tests/Feature/SanctumScan/SettlementBackfillMigrationTest.php), [`SettlementConcurrencyTest.php`](tests/Feature/SanctumScan/SettlementConcurrencyTest.php) | MySQL concurrency test is skipped outside MySQL; legacy duplicate route names remain outside the Sanctum namespace |
 | Environment template | [`EnvironmentTemplateSecurityTest.php`](tests/Feature/EnvironmentTemplateSecurityTest.php) | Does not boot the full app in the current revision |
 | Legacy commerce | None | Entire legacy surface untested |
 | Webhooks | None | Signature/authorization tests absent |
 | Installer | None | Post-install exposure untested |
-| Routes | None | Duplicate names, public-route allowlist, middleware assertions absent |
+| Routes | [`RouteRegistryTest.php`](tests/Feature/RouteRegistryTest.php) | Sanctum names are unique and settlement actions resolve; 14 pre-existing legacy duplicate names remain outside this namespace |
 
 ---
 
@@ -229,14 +231,14 @@ There is no documented server-to-server merchant settlement webhook in the QR ga
 | Claim | Reality in this revision |
 |---|---|
 | Roadmap/README: M012–M014 implemented | No provenance export route/service/command exists on this branch (`grep` found none). |
-| Roadmap: M016 “Planned / not started” | Migration + orphan service exist; no integration or tests. |
-| Roadmap: M015 “In progress, not merged” | M015 code and tests are present on this branch. |
+| Roadmap: M016 “Planned / not started” | Implemented and verified on this branch: table-driven service, buyer/admin wiring, migration backfill, lifecycle and matrix tests; no funds move. |
+| Roadmap: M015 “In progress, not merged” | M015 code and tests are present; duplicate route registration removed, superseded controller remains unreferenced. |
 | ADR 0014 referenced by roadmap | File is absent. |
 | ADR 0012: gate returns 422 | Implementation and API doc return 403 (`buyer_identity_unverified`). |
 | ADR 0015: gate optional | Matches code, but conflicts with ADR 0012 framing/status code. |
 | Roadmap maps M012→ADR 0012 and M013→ADR 0013 | Those ADRs cover identity prerequisites and quantity visibility, not provenance. |
-| README: “Implemented protocol slices” | True for M002–M011; M012–M014 are branch-only/absent; M015 is present but duplicated; M016 is partial. |
-| API docs | Generally align with code for M002–M011 and M015; settlement is undocumented. |
+| README: “Implemented protocol slices” | True for M002–M011 and M015–M016; M012–M014 are branch-only/absent. |
+| API docs | Generally align with code for M002–M011, M015, and the M016 admin endpoint; the buyer payment-reference response now includes settlement status. |
 
 ---
 

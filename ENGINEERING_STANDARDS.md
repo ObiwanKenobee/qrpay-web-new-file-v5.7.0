@@ -33,20 +33,20 @@ These derive from the accepted ADRs and the existing module design. They must no
 
 ## 2. Current enforcement baseline
 
-| Control | Current state | Evidence |
+| Control | Current state (2026-11-16) | Evidence |
 |---|---|---|
-| PHP syntax check | CI lints changed files only | [`.github/workflows/sanctum-scan-php-lint.yml:68`](.github/workflows/sanctum-scan-php-lint.yml:68) |
-| Conflict-marker rejection | **Absent** | Conflict markers committed in `app/Models/Admin/BasicSettings.php:37` |
-| Full test suite | CI runs one file only | Workflow line 94 |
-| Tests on active feature branches | **Absent** for `feature/*` pushes | Workflow triggers only `sanctum-scan/**` pushes and `main` PRs |
-| Database migration test | **Absent** | Tests build handcrafted SQLite schemas |
-| MySQL compatibility test | **Absent** | No MySQL CI job |
-| Pint | Installed, not run in CI; 6 style issues in `app/Services/SanctumScan` | `vendor/bin/pint --test app/Services/SanctumScan` |
-| Static analysis | **Absent** | No PHPStan/Larastan dependency or config |
-| Dependency audit | **Absent** in CI; local audit found 1 advisory | `composer audit --locked --no-dev` |
-| Route name uniqueness | **Absent** | Duplicate `sanctum.identity-checks.*` names |
-| Route/middleware inventory | **Absent** | No route snapshot test |
-| Frontend build reproducibility | **Absent** | No `package-lock.json` tracked |
+| PHP syntax check | Every tracked non-Blade PHP file | `tools/check-php-syntax.php` (G2) |
+| Conflict-marker rejection | Enforced | `tools/check-conflict-markers.php` (G1) |
+| Full test suite | Every push and PR, no file allowlist | `.github/workflows/sanctum-scan-php-lint.yml` (G3) |
+| Tests on active feature branches | Enforced for all branches | Workflow triggers `push` and `pull_request` with no filters |
+| Database migration test | Settlement migration up/down on SQLite; MySQL job wired | `SettlementBackfillMigrationTest`, workflow `mysql` job |
+| MySQL compatibility test | Job wired, first run pending | `migrate:fresh`, `route:list`, concurrency test |
+| Pint | Enforced on changed files | `tools/verify.sh` (G8) |
+| Static analysis | **Absent** — deferred, no gate claimed | No PHPStan/Larastan dependency or config (R-10) |
+| Dependency audit | Enforced with a reviewed advisory allowlist | `tools/check-dependency-audit.php` (G7, R-28) |
+| Route name uniqueness | Enforced globally with shrink-only legacy allowlist | `RouteRegistryTest` (G5, R-26) |
+| Route/middleware inventory | Enforced for state-changing routes | `RouteRegistryTest` + `tools/route-registry-allowlist.php` |
+| Frontend build reproducibility | **Absent** — no lockfile, no build gate | `package.json` tracked without `package-lock.json` (R-15) |
 | Deployment/rollback docs | **Absent** | No Dockerfile, deploy script, or runbook besides README prose |
 
 ---
@@ -83,37 +83,30 @@ The conflict-marker check is the single highest-value control: it would have pre
 
 ### 3.2 Pre-push / CI
 
-Run, at minimum:
+The single command that mirrors CI:
 
 ```bash
-# All tracked PHP files, not only changed files (cheap enough for this repo).
-git ls-files '*.php' | xargs -n1 -P4 php -l
-
-# Style check (do not auto-fix in CI).
-vendor/bin/pint --test
-
-# Full suite, not a single file.
-vendor/bin/phpunit
-
-# Dependency advisories.
-composer audit --locked
-
-# Frontend build, once a lockfile exists.
-npm ci && npm run build
+composer check              # G1, G2, G3, G7, G8
+SKIP_TESTS=1 composer check # fast gates while iterating
 ```
 
-### 3.3 Required CI jobs (recommendation)
+`tools/verify.sh` documents each step. The MySQL job (`migrate:fresh`,
+`route:list --json`, backfill down/up, concurrency test) cannot run locally
+without a disposable MySQL instance; CI owns it.
+
+Do not add a gate that `composer check` cannot reproduce. The frontend build is
+deliberately not a gate until a lockfile exists.
+
+### 3.3 Required CI jobs (implemented)
 
 | Job | Purpose | Failure policy |
 |---|---|---|
-| `static` | conflict markers, `php -l` all files, `composer validate --strict`, Pint `--test` | Block merge |
-| `unit` | service/state-machine tests on SQLite | Block merge |
-| `feature-sqlite` | HTTP feature tests with `RefreshDatabase` | Block merge |
-| `feature-mysql` | migrations + feature tests against MySQL 8 | Block merge |
-| `security` | route allowlist, authorization matrix, webhook signature tests, `composer audit` | Block merge |
-| `frontend` | `npm ci && npm run build` | Block merge |
+| `gates` | G1 markers, G2 syntax, G3 full suite, G7 composer/audit, G8 Pint on changed files | Block merge |
+| `mysql` | G4 `migrate:fresh`, backfill down/up, concurrency; G5 `route:list --json` smoke | Block merge |
 
-Triggers must include **all branches and all pull requests**, not only `main` and `sanctum-scan/**`.
+Triggers are **all branches and all pull requests**, with no path filters.
+Branch protection must mark both jobs required; enabling that is a repository
+setting, not a code change.
 
 ### 3.4 Test execution honesty
 

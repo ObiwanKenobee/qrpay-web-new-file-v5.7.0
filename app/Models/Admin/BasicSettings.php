@@ -12,56 +12,53 @@ class BasicSettings extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
-        'sms_api'                       => 'string',
-        'sms_config'                    => 'object',
-        'mail_config'                   => 'object',
-        'push_notification_config'      => 'object',
-        'broadcast_config'              => 'object',
-        'email_verification'            => 'boolean',
-        'email_notification'            => 'boolean',
-        'kyc_verification'              => 'boolean',
-        'agent_email_verification'      => 'boolean',
-        'agent_email_notification'      => 'boolean',
-        'agent_kyc_verification'        => 'boolean',
-        'merchant_email_verification'   => 'boolean',
-        'merchant_email_notification'   => 'boolean',
-        'merchant_kyc_verification'     => 'boolean',
-        'sms_verification'              => 'boolean',
-        'sms_notification'              => 'boolean',
-        'agent_sms_verification'        => 'boolean',
-        'agent_sms_notification'        => 'boolean',
-        'merchant_sms_verification'     => 'boolean',
-        'merchant_sms_notification'     => 'boolean',
-        'user_pin_verification'         => 'boolean',
-        'agent_pin_verification'        => 'boolean',
-<<<<<<< HEAD
-        'merchant_pin_verification'     => 'boolean',
+        'sms_api' => 'string',
+        'sms_config' => 'object',
+        'mail_config' => 'object',
+        'push_notification_config' => 'object',
+        'broadcast_config' => 'object',
+        'email_verification' => 'boolean',
+        'email_notification' => 'boolean',
+        'kyc_verification' => 'boolean',
+        'agent_email_verification' => 'boolean',
+        'agent_email_notification' => 'boolean',
+        'agent_kyc_verification' => 'boolean',
+        'merchant_email_verification' => 'boolean',
+        'merchant_email_notification' => 'boolean',
+        'merchant_kyc_verification' => 'boolean',
+        'sms_verification' => 'boolean',
+        'sms_notification' => 'boolean',
+        'agent_sms_verification' => 'boolean',
+        'agent_sms_notification' => 'boolean',
+        'merchant_sms_verification' => 'boolean',
+        'merchant_sms_notification' => 'boolean',
+        'user_pin_verification' => 'boolean',
+        'agent_pin_verification' => 'boolean',
+        'merchant_pin_verification' => 'boolean',
         'sanctum_exchange_identity_gate' => 'boolean',
         'storage_config' => 'object',
-=======
-        'merchant_pin_verification'              => 'boolean',
-        'sanctum_exchange_identity_gate'          => 'boolean',
-        'storage_config'                          => 'object',
->>>>>>> 6703824 (	new file:   app/Http/Controllers/Admin/SanctumScanUserIdentityController.php)
     ];
 
+    public function mailConfig() {}
 
-    public function mailConfig() {
-
-    }
     public function scopeSitename($query, $pageTitle)
     {
-        $pageTitle = empty($pageTitle) ? '' : ' - ' . $pageTitle;
-        return $this->site_name . $pageTitle;
+        $pageTitle = empty($pageTitle) ? '' : ' - '.$pageTitle;
+
+        return $this->site_name.$pageTitle;
     }
+
     public function scopeSitenameAgent($query, $pageTitle)
     {
-        $pageTitle = empty($pageTitle) ? '' : ' - ' . $pageTitle;
-        return $this->agent_site_name . $pageTitle;
+        $pageTitle = empty($pageTitle) ? '' : ' - '.$pageTitle;
+
+        return $this->agent_site_name.$pageTitle;
     }
+
     public function scopeSitenameMerchant($query, $pageTitle)
     {
-        $pageTitle = empty($pageTitle) ? '' : ' - ' . $pageTitle;
-        return $this->merchant_site_name . $pageTitle;
+        $pageTitle = empty($pageTitle) ? '' : ' - '.$pageTitle;
+
+        return $this->merchant_site_name.$pageTitle;
     }
 }

@@ -12,7 +12,7 @@ both locations.
 
 ## Numbering
 
-The next available number is **0016**. Number 0014 was never written on this
+The next available number is **0019**. Number 0014 was never written on this
 branch; the gap is intentional and must not be reused or backfilled with a
 record that was never decided. Numbers are never recycled.
 
@@ -37,6 +37,7 @@ record that was never decided. Numbers are never recycled.
 | 0015 | Manual buyer identity review | Sanctum Scan | `docs/architecture/decisions/0015-manual-buyer-identity-review.md` |
 | 0016 | Deterministic verification gates | Engineering process | `docs/decisions/0016-deterministic-verification-gates.md` |
 | 0017 | Settlement slice and evidence-based milestones | Delivery strategy | `docs/decisions/0017-settlement-slice-and-evidence-based-milestones.md` |
+| 0018 | Payment evidence versioning and reopened verification | Sanctum Scan | `docs/decisions/0018-payment-evidence-versioning.md` |
 
 The **Status** of each record is authoritative in the record itself (Proposed,
 Accepted, Implemented, Superseded, or Rejected). This index does not duplicate

@@ -3,12 +3,13 @@
 namespace App\Http\Controllers\Api\User;
 
 use App\Http\Controllers\Controller;
+use App\Models\Merchants\Merchant;
 use App\Models\SanctumScanExchange;
 use App\Models\SanctumScanExchangePaymentEvidence;
-use App\Models\Merchants\Merchant;
 use App\Models\SanctumScanResource;
-use App\Models\User;
 use App\Services\SanctumScan\ExchangeEventRecorder;
+use App\Services\SanctumScan\ExchangeSettlementManager;
+use App\Services\SanctumScan\SettlementStateMachine;
 use App\Services\SanctumScan\UserIdentityCheckManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -40,18 +41,19 @@ class SanctumScanExchangeController extends Controller
         Request $request,
         int $exchangeId,
         ExchangeEventRecorder $events,
-        UserIdentityCheckManager $identityChecks
+        UserIdentityCheckManager $identityChecks,
+        ExchangeSettlementManager $settlement
     ): JsonResponse {
         $buyer = $request->user('api');
 
-        $exchange = DB::transaction(function () use ($buyer, $exchangeId, $events, $identityChecks) {
+        $exchange = DB::transaction(function () use ($buyer, $exchangeId, $events, $identityChecks, $settlement) {
             $exchange = SanctumScanExchange::query()
                 ->whereKey($exchangeId)
                 ->where('buyer_user_id', $buyer->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ($this->expireIfNeeded($exchange, $events)) {
+            if ($this->expireIfNeeded($exchange, $events, $settlement)) {
                 return 'expired';
             }
 
@@ -91,6 +93,8 @@ class SanctumScanExchangeController extends Controller
                     0,
                     'system_recorded'
                 );
+
+                $settlement->cancelForClosedExchange($exchange, 'system', 0, 'cancelled');
 
                 return 'withdrawn';
             }
@@ -139,18 +143,19 @@ class SanctumScanExchangeController extends Controller
     public function decline(
         Request $request,
         int $exchangeId,
-        ExchangeEventRecorder $events
+        ExchangeEventRecorder $events,
+        ExchangeSettlementManager $settlement
     ): JsonResponse {
         $buyer = $request->user('api');
 
-        $exchange = DB::transaction(function () use ($buyer, $exchangeId, $events) {
+        $exchange = DB::transaction(function () use ($buyer, $exchangeId, $events, $settlement) {
             $exchange = SanctumScanExchange::query()
                 ->whereKey($exchangeId)
                 ->where('buyer_user_id', $buyer->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ($this->expireIfNeeded($exchange, $events)) {
+            if ($this->expireIfNeeded($exchange, $events, $settlement)) {
                 return 'expired';
             }
 
@@ -171,6 +176,8 @@ class SanctumScanExchangeController extends Controller
                 (int) $buyer->getKey(),
                 'buyer_declared'
             );
+
+            $settlement->cancelForClosedExchange($exchange, 'api', (int) $buyer->getKey(), 'declined');
 
             return $exchange->fresh(['merchant:id,username,business_name', 'paymentEvidence', 'events']);
         });
@@ -242,7 +249,8 @@ class SanctumScanExchangeController extends Controller
     public function submitPaymentReference(
         Request $request,
         int $exchangeId,
-        ExchangeEventRecorder $events
+        ExchangeEventRecorder $events,
+        ExchangeSettlementManager $settlement
     ): JsonResponse {
         $validator = Validator::make($request->all(), [
             'rail' => 'required|in:mpesa,bank_transfer,cash,card,other',
@@ -260,7 +268,7 @@ class SanctumScanExchangeController extends Controller
         $buyer = $request->user('api');
         $validated = $validator->validated();
 
-        $result = DB::transaction(function () use ($buyer, $exchangeId, $validated, $events) {
+        $result = DB::transaction(function () use ($buyer, $exchangeId, $validated, $events, $settlement) {
             $exchange = SanctumScanExchange::query()
                 ->whereKey($exchangeId)
                 ->where('buyer_user_id', $buyer->getKey())
@@ -271,8 +279,24 @@ class SanctumScanExchangeController extends Controller
                 return 'invalid_state';
             }
 
-            if (SanctumScanExchangePaymentEvidence::query()->where('exchange_id', $exchange->getKey())->exists()) {
+            $latestEvidence = SanctumScanExchangePaymentEvidence::query()
+                ->where('exchange_id', $exchange->getKey())
+                ->orderByDesc('version')
+                ->first();
+
+            $isResubmission = $latestEvidence !== null
+                && $exchange->settlement_status === SettlementStateMachine::REJECTED;
+
+            if ($latestEvidence && ! $isResubmission) {
                 return 'already_submitted';
+            }
+
+            if (! SettlementStateMachine::canTransition(
+                $exchange->settlement_status,
+                SettlementStateMachine::EVIDENCE_SUBMITTED,
+                'api'
+            )) {
+                return 'settlement_state_conflict';
             }
 
             if (
@@ -283,8 +307,12 @@ class SanctumScanExchangeController extends Controller
                 return 'amount_mismatch';
             }
 
+            $version = $latestEvidence ? $latestEvidence->version + 1 : 1;
+
             $evidence = SanctumScanExchangePaymentEvidence::create([
                 'exchange_id' => $exchange->getKey(),
+                'version' => $version,
+                'supersedes_id' => $latestEvidence?->getKey(),
                 'rail' => $validated['rail'],
                 'reference' => trim($validated['reference']),
                 'amount' => (string) $validated['amount'],
@@ -297,12 +325,16 @@ class SanctumScanExchangeController extends Controller
 
             $events->record(
                 $exchange,
-                'payment_reference_submitted',
-                'The buyer submitted a payment reference. Settlement has not been verified.',
+                $isResubmission ? 'payment_reference_resubmitted' : 'payment_reference_submitted',
+                $isResubmission
+                    ? 'The buyer submitted a replacement payment reference after rejection. Settlement has not been verified.'
+                    : 'The buyer submitted a payment reference. Settlement has not been verified.',
                 'api',
                 (int) $buyer->getKey(),
                 'unverified',
                 [
+                    'version' => $version,
+                    'supersedes_id' => $evidence->supersedes_id,
                     'rail' => $evidence->rail,
                     'reference' => $evidence->reference,
                     'amount' => (string) $evidence->amount,
@@ -310,11 +342,22 @@ class SanctumScanExchangeController extends Controller
                 ]
             );
 
+            $settlementResult = $settlement->recordEvidenceSubmitted($exchange, (int) $buyer->getKey());
+
+            if (! $settlementResult->ok) {
+                throw new \RuntimeException(
+                    'Settlement transition failed after evidence submission: '.$settlementResult->error
+                );
+            }
+
             return $exchange->fresh(['merchant:id,username,business_name', 'paymentEvidence', 'events']);
         });
 
         if ($result === 'invalid_state') {
             return $this->stateError('invalid_exchange_state', 'Payment evidence can only be attached after an offer has been accepted.');
+        }
+        if ($result === 'settlement_state_conflict') {
+            return $this->stateError('invalid_settlement_state', 'The settlement record for this exchange cannot accept payment evidence.');
         }
         if ($result === 'already_submitted') {
             return $this->stateError('payment_reference_exists', 'A payment reference has already been submitted for this exchange.');
@@ -327,6 +370,7 @@ class SanctumScanExchangeController extends Controller
             'data' => [
                 'exchange' => $this->present($result),
                 'payment_evidence' => [
+                    'version' => $result->paymentEvidence?->version,
                     'verification_status' => 'unverified',
                     'message' => 'Reference recorded. This is not confirmation of payment or settlement.',
                 ],
@@ -336,7 +380,8 @@ class SanctumScanExchangeController extends Controller
 
     private function expireIfNeeded(
         SanctumScanExchange $exchange,
-        ExchangeEventRecorder $events
+        ExchangeEventRecorder $events,
+        ExchangeSettlementManager $settlement
     ): bool {
         if (
             $exchange->status !== 'offered'
@@ -357,6 +402,8 @@ class SanctumScanExchangeController extends Controller
             'system_recorded'
         );
 
+        $settlement->cancelForClosedExchange($exchange, 'system', 0, 'expired');
+
         return true;
     }
 
@@ -371,7 +418,7 @@ class SanctumScanExchangeController extends Controller
         $whole = $whole === '' ? '0' : $whole;
         $fraction = rtrim($fraction, '0');
 
-        return $fraction === '' ? $whole : $whole . '.' . $fraction;
+        return $fraction === '' ? $whole : $whole.'.'.$fraction;
     }
 
     private function stateError(string $code, string $message): JsonResponse
@@ -416,11 +463,14 @@ class SanctumScanExchangeController extends Controller
             'currency' => $exchange->currency,
             'terms' => $exchange->terms,
             'status' => $status,
+            'settlement_status' => $exchange->settlement_status,
+            'settlement_status_updated_at' => $exchange->settlement_status_updated_at?->toIso8601String(),
             'expires_at' => $exchange->expires_at?->toIso8601String(),
             'accepted_at' => $exchange->accepted_at?->toIso8601String(),
             'dispatched_at' => $exchange->dispatched_at?->toIso8601String(),
             'received_at' => $exchange->received_at?->toIso8601String(),
             'payment_evidence' => $evidence ? [
+                'version' => $evidence->version,
                 'rail' => $evidence->rail,
                 'reference' => $evidence->reference,
                 'amount' => (string) $evidence->amount,

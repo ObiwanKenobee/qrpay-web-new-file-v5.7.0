@@ -1,11 +1,20 @@
 # QODOR-002 — Settlement State Machine Vertical Slice
 
-**Status:** Proposed
+**Status:** Implemented (2026-11-16); CI/MySQL gates pending
 **Date:** 2026-11-16
 **Depends on:** ADR 0016 (gates), ADR 0017 (scope and status rules)
 **Base branch:** `feature/qrpay-update` @ `4ddb392`
 **Target:** one reviewable pull request after the P0 branch repair, or two
 stacked pull requests as described in Phase 0.
+
+> **Implementation evidence:** `composer check` → 94 tests / 1,017 assertions / 1
+> MySQL-only skip; Pint passes on 30 changed PHP files; `php -l` clean on 950
+> tracked non-Blade PHP files; Sanctum route names unique and settlement actions
+> resolve. ADR 0016 gates are wired (M017), the production operator middleware
+> stack is tested (M018), ADR 0012 records the implemented 403 contract, the
+> superseded identity controller is deleted, and evidence is versioned so
+> rejection can be reopened (M019, ADR 0018). Remaining: first GitHub CI run and
+> the MySQL job (G4).
 
 ## Goal
 
@@ -29,8 +38,10 @@ participants. No money moves.
    response does not.
 7. Exhaustive unit tests, HTTP tests, a MySQL migration test, and a MySQL
    concurrency test pass in CI.
-8. Documentation matches the code, including the terminal status of
-   `payment_rejected` and the 403/422 identity-gate contract.
+8. Documentation matches the code, including the rejection behaviour and the
+   403/422 identity-gate contract. *(Amendment 2026-11-16: M019/ADR 0018 made
+   `payment_rejected` a resting state with versioned resubmission, so it is no
+   longer terminal.)*
 
 ## Phase 0 — P0 branch repair and gates (do this first, separately)
 
@@ -337,8 +348,9 @@ Cover:
    event;
 3. admin verifies → `payment_verified`; event recorded;
 4. admin settles → `settled`; event recorded; terminal;
-5. admin rejects → `payment_rejected`; terminal; resubmission attempt is
-   rejected by the existing evidence-uniqueness/state rules;
+5. admin rejects → `payment_rejected`; *(amended 2026-11-16: M019/ADR 0018 lets
+   the buyer append version 2 and reopen verification; a resubmission while
+   settlement is still `payment_evidence_submitted` remains rejected)*;
 6. illegal transitions (`awaiting_payment` → `settled`, `settled` →
    anything, `payment_verified` → `cancelled`) return 409 and write no event;
 7. repeating the same successful transition returns 409 `already_in_state`
@@ -426,18 +438,30 @@ failure with a tracking task; it may not be silently skipped.
 
 ## Acceptance checklist
 
-- [ ] Phase 0 merged: application boots; full suite runs; ADR 0016 gates active.
-- [ ] `php artisan route:list --json` succeeds and has no duplicate names.
-- [ ] Transition matrix test is exhaustive and passes.
-- [ ] Buyer evidence submission moves settlement state atomically.
-- [ ] Admin verify/reject/settle works only for active admins and writes one
-      event per transition.
-- [ ] Closed-exchange paths keep settlement consistent.
-- [ ] Buyer/merchant projections include settlement; public scan does not.
-- [ ] MySQL backfill migration up/down tested.
-- [ ] MySQL concurrency test passes with one winner and one event.
-- [ ] Full suite green in CI at the merged commit; results linked.
-- [ ] Documentation and ADR statuses updated; no feature claimed without
+- [x] Phase 0 boot repair: application boots; full suite runs. ADR 0016 gates
+      are wired in M017 (`composer check` and the CI workflow); GitHub execution
+      and branch protection remain under R-02.
+- [x] Route registry gate enabled: `RouteRegistryTest` asserts global name
+      uniqueness, action resolution, and write-route middleware with
+      shrink-only allowlists; `route:list --json` runs in the MySQL CI job. The
+      14 legacy duplicates (R-26) and 4 dead routes (R-29) are tracked debt.
+- [x] Transition matrix test is exhaustive and passes (144 combinations).
+- [x] Buyer evidence submission moves settlement state atomically.
+- [x] Admin verify/reject/settle works for active admins via the controller and
+      writes one event per transition; the production operator middleware stack
+      is verified separately by `AdminOperatorMiddlewareTest` (R-27, M018).
+- [x] Closed-exchange paths keep settlement consistent.
+- [x] Buyer/merchant projections include settlement; public scan does not.
+- [ ] MySQL backfill migration `up()`/`down()` tested — exercised on SQLite; the
+      MySQL job is pending.
+- [ ] MySQL concurrency test passes with one winner and one event — test is
+      written but skipped outside MySQL.
+- [ ] Full suite green in CI at the merged commit — green locally (94 tests /
+      1,017 assertions / 1 skip); CI workflow wired in M017, first GitHub run
+      pending.
+- [x] Rejected evidence can be superseded by an append-only version and
+      verification reopened (M019, ADR 0018).
+- [x] Documentation and ADR statuses updated; no feature claimed without
       evidence.
 
 ## Out of scope
@@ -445,7 +469,7 @@ failure with a tracking task; it may not be silently skipped.
 - Moving money, wallet debits/credits, ledger entries, gateway calls, escrow.
 - Automatic payment verification or reconciliation against bank/mobile-money
   statements.
-- Evidence resubmission after rejection (requires evidence versioning; new ADR).
+- ~~Evidence resubmission after rejection~~ — delivered in M019 (ADR 0018).
 - Refunds, chargebacks, and dispute-driven settlement reversal.
 - Exposing settlement state on the public scan endpoint.
 - Legacy payment, wallet, and transaction controllers.

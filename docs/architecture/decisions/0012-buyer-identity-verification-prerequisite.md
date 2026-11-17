@@ -26,7 +26,9 @@ A platform administrator's `verified` review means the administrator recorded a 
 
 ### Feature flag
 
-A `sanctum_exchange_identity_gate` boolean column on `basic_settings` (default `false`) controls whether the gate is enforced. When `false`, the existing email and SMS verification requirements remain the only buyer eligibility conditions. When `true`, a buyer without `identity_verified_at` receives a `buyer_identity_unverified` 422 response on offer acceptance.
+A `sanctum_exchange_identity_gate` boolean column on `basic_settings` (default `false`) controls whether the gate is enforced. When `false`, the existing email and SMS verification requirements remain the only buyer eligibility conditions. When `true`, a buyer without `identity_verified_at` receives a `buyer_identity_unverified` 403 response on offer acceptance.
+
+**Amendment 2026-11-16:** the original record specified 422. The implemented and documented contract is 403 (`app/Http/Controllers/Api/User/SanctumScanExchangeController.php:123-130`, `docs/api/sanctum-scan-buyer-identity-review.md`). 403 is correct: the request is well-formed, but the authenticated buyer lacks a prerequisite the platform requires. 422 is reserved for malformed request data. The test `EconomicExchangeLifecycleTest` asserts 403 and the error code.
 
 This allows the gate to be enabled progressively per deployment without a code change.
 

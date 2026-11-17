@@ -174,7 +174,7 @@
                             <div class="event-copy">Evidence status: {{ str_replace('_', ' ', $event['verification_status'] ?? 'merchant_declared') }}</div>
                         </div>
                     @endforeach
-                    <p class="disclaimer">These details were supplied by the merchant. This record is not independent proof of origin, ownership, quality, certification or delivery.</p>
+                    <p class="disclaimer">These details were supplied by the merchant and are not independently verified. This record is not independent proof of origin, ownership, quality, certification or delivery.</p>
                 </section>
             @elseif ($resourceType === 'merchant')
                 <p class="disclaimer">This is a public business identifier. Scanning it does not authorize a payment or confirm a transaction.</p>
