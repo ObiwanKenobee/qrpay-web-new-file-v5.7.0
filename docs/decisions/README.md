@@ -12,9 +12,13 @@ both locations.
 
 ## Numbering
 
-The next available number is **0019**. Number 0014 was never written on this
-branch; the gap is intentional and must not be reused or backfilled with a
-record that was never decided. Numbers are never recycled.
+The next available number after ADR 0019 is **0020**. Older proposed provenance
+design files in `docs/architecture/decisions/` reuse identifiers already
+assigned to accepted identity and quantity decisions (0012 and 0013); a
+proposed provenance-hardening note also uses 0014 although the canonical index
+reserves that number. These legacy duplicate identifiers are not canonical
+ADRs. Their disposition and links must be reconciled in M021. Numbers are
+never recycled.
 
 ## Index
 
@@ -33,11 +37,12 @@ record that was never decided. Numbers are never recycled.
 | 0011 | Independent attestation reassessment | Sanctum Scan | `docs/architecture/decisions/0011-independent-attestation-reassessment.md` |
 | 0012 | Buyer identity verification prerequisite | Sanctum Scan | `docs/architecture/decisions/0012-buyer-identity-verification-prerequisite.md` |
 | 0013 | Exchange quantity and unit visibility | Sanctum Scan | `docs/architecture/decisions/0013-exchange-quantity-and-unit-visibility.md` |
-| 0014 | — (not written) | — | — |
+| 0014 | Reserved; legacy proposed provenance note uses this duplicate identifier | — | Canonical ADR not assigned |
 | 0015 | Manual buyer identity review | Sanctum Scan | `docs/architecture/decisions/0015-manual-buyer-identity-review.md` |
 | 0016 | Deterministic verification gates | Engineering process | `docs/decisions/0016-deterministic-verification-gates.md` |
 | 0017 | Settlement slice and evidence-based milestones | Delivery strategy | `docs/decisions/0017-settlement-slice-and-evidence-based-milestones.md` |
 | 0018 | Payment evidence versioning and reopened verification | Sanctum Scan | `docs/decisions/0018-payment-evidence-versioning.md` |
+| 0019 | Evidence-version-bound settlement decisions | Sanctum Scan | `docs/decisions/0019-evidence-version-bound-settlement-decisions.md` |
 
 The **Status** of each record is authoritative in the record itself (Proposed,
 Accepted, Implemented, Superseded, or Rejected). This index does not duplicate
