@@ -147,6 +147,14 @@ class AdminOperatorMiddlewareTest extends TestCase
             ->assertJsonPath('data.pagination.total', 2)
             ->assertJsonPath('data.pagination.current_page', 2);
 
+        $this->actingAs($admin, 'admin')->getJson($url.'?per_page=500')
+            ->assertOk()
+            ->assertJsonPath('data.pagination.per_page', 100);
+
+        $this->actingAs($admin, 'admin')->getJson($url.'?per_page=0')
+            ->assertOk()
+            ->assertJsonPath('data.pagination.per_page', 1);
+
         $this->actingAs($admin, 'admin')->getJson($url.'?settlement_status=awaiting_payment')
             ->assertOk()
             ->assertJsonPath('data.pagination.total', 1)
