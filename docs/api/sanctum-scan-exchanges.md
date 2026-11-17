@@ -113,6 +113,24 @@ The response marks the evidence \`unverified\` and includes its \`version\`. A r
 
 Payment reference submission uses the existing user PIN and KYC gates.
 
+### Settlement decision evidence binding
+
+Each administrator verification, rejection, and settlement event records the
+exact immutable payment-evidence row it acted upon:
+
+- `payment_evidence_id` — database identity of the evidence version;
+- `payment_evidence_version` — buyer submission sequence number;
+- `payment_evidence_sha256` — SHA-256 fingerprint of the complete version,
+  including its exchange, version/supersession metadata, rail, reference,
+  amount, currency, submitting actor and submission timestamp.
+
+The fingerprint payload uses a fixed key order and compact UTF-8 JSON with
+unescaped slashes/Unicode, invalid-UTF-8 substitution and preserved zero
+fractions. The hash is an audit fingerprint, not a digital signature, trusted
+timestamp, payment-provider confirmation or proof that funds moved. The
+evidence row itself remains `unverified`; the administrator's decision is
+recorded separately in the immutable exchange event.
+
 ## Exchange states
 
 | State | Meaning |
