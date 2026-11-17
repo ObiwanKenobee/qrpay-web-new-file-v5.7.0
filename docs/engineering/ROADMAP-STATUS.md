@@ -1,7 +1,7 @@
 # Roadmap Status — QRPay / Sanctum Scan
 
 **Date:** 2026-11-17
-**Branch:** `main` with M020 in progress on PR #25 and M021 in progress on `sanctum-scan/m021-canonical-provenance-adrs`
+**Branch:** `main` with M020 in progress on PR #25, M021 in progress on `sanctum-scan/m021-canonical-provenance-adrs`, and M022 in progress on `sanctum-scan/m022-genuine-settlement-concurrency`
 **Method:** roadmap phases from [`README.md`](../README.md#13-development-roadmap) mapped to repository evidence per ADR 0017. A capability is only **Verified** when an executed test or command proves it; roadmap checkboxes are not evidence.
 
 **Current executed baseline:** `composer check` → 96 tests, 1,049 assertions, 1 skipped (MySQL-only concurrency test), green on SQLite; G1, G2, G7, G8 green. Pint passes on all 32 changed PHP files. The MySQL job's full step sequence is green locally on MySQL 9.4 (migrations, route:list 1,347 routes, backfill down/up, concurrency test); only the GitHub runner run is pending.
@@ -88,12 +88,22 @@ Canonical ADRs 0020–0022 now describe M012–M014, while the old paths remain 
 compatibility pointers. ADRs 0012/0013 remain unchanged and 0014 remains
 unassigned.
 
-The next engineering priorities are M022 (genuine concurrent
-manager-transition testing) and M023 (explicit protection against destructive
-evidence-version rollback). M024 addresses the admin reconciliation interface;
-M025 defines the pilot's participant/value-chain scope and outcome measures.
-M026 tracks a consistent-database-snapshot guarantee for M012 exports, which
-currently compose provenance context and evidence from separate reads.
+**M022 — Genuine settlement concurrency testing** is in progress on
+`sanctum-scan/m022-genuine-settlement-concurrency`:
+[M022 engineering record](M022-genuine-settlement-concurrency.md). Two separate
+PHP workers now contend for the same MySQL exchange-row lock while requesting
+opposite administrator decisions. The test requires one committed winner, one
+`stale_expected_status` loser and one matching immutable event. The G4 workflow
+now explicitly runs the Sanctum Scan feature suite before its dedicated
+concurrency test. CI execution remains pending.
+
+**Next engineering priority: M023 — Fail-safe rollback guard for payment
+evidence versioning.** It must refuse a rollback that would collapse or destroy
+an exchange's version history. M024 addresses the admin reconciliation
+interface; M025 defines the pilot's participant/value-chain scope and outcome
+measures. M026 tracks a consistent-database-snapshot guarantee for M012
+exports, which currently compose provenance context and evidence from separate
+reads.
 
 The M017 operational gate remains open: GitHub Actions must execute the gates
 successfully and branch protection must require them (R-02). Local success is

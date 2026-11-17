@@ -3,15 +3,20 @@
 namespace Tests\Feature\SanctumScan;
 
 use App\Models\SanctumScanExchange;
-use App\Services\SanctumScan\ExchangeSettlementManager;
-use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 /**
  * Required by the G4 MySQL job (set SANCTUM_SETTLEMENT_CONCURRENCY=1 and run
- * against a migrated MySQL database). Skipped on SQLite and skipped by
- * default so a developer's local MySQL database is never modified.
+ * against a migrated, disposable MySQL database). Skipped on SQLite and
+ * skipped by default so a developer's local MySQL database is never modified.
+ *
+ * The test starts two independent PHP workers. A third connection temporarily
+ * holds the exchange row lock until both workers have reached their own
+ * SELECT ... FOR UPDATE call. Releasing that lock makes the two manager
+ * transitions compete under InnoDB rather than simulating concurrency with
+ * sequential calls in one PHPUnit process.
  */
 class SettlementConcurrencyTest extends TestCase
 {
@@ -22,6 +27,11 @@ class SettlementConcurrencyTest extends TestCase
     private ?int $resourceId = null;
 
     private ?int $exchangeId = null;
+
+    private ?string $barrierDirectory = null;
+
+    /** @var array<string, Process> */
+    private array $workerProcesses = [];
 
     protected function setUp(): void
     {
@@ -109,81 +119,203 @@ class SettlementConcurrencyTest extends TestCase
         ]);
     }
 
-    public function test_two_writers_serialize_on_the_exchange_row_and_only_one_transition_wins(): void
+    public function test_two_competing_manager_transitions_append_exactly_one_decision(): void
     {
-        config(['database.connections.settlement_probe' => config('database.connections.mysql')]);
-        DB::purge('settlement_probe');
+        $this->barrierDirectory = sys_get_temp_dir()
+            .DIRECTORY_SEPARATOR
+            .'sanctum-settlement-'
+            .$this->exchangeId
+            .'-'
+            .bin2hex(random_bytes(6));
 
-        $default = DB::connection();
-        $probe = DB::connection('settlement_probe');
+        if (! mkdir($this->barrierDirectory, 0700, true) && ! is_dir($this->barrierDirectory)) {
+            $this->fail('Could not create the settlement concurrency barrier directory.');
+        }
 
-        $default->beginTransaction();
+        $workerPath = base_path('tests/Support/SanctumScan/settlement-concurrency-worker.php');
+
+        $this->workerProcesses = [
+            'verified' => new Process([
+                PHP_BINARY,
+                $workerPath,
+                (string) $this->exchangeId,
+                'payment_verified',
+                '101',
+                'payment_evidence_submitted',
+                $this->barrierDirectory,
+                'verified',
+            ], base_path(), ['APP_ENV' => 'testing']),
+            'rejected' => new Process([
+                PHP_BINARY,
+                $workerPath,
+                (string) $this->exchangeId,
+                'payment_rejected',
+                '102',
+                'payment_evidence_submitted',
+                $this->barrierDirectory,
+                'rejected',
+            ], base_path(), ['APP_ENV' => 'testing']),
+        ];
+
+        foreach ($this->workerProcesses as $process) {
+            $process->setTimeout(30);
+        }
+
+        $coordinator = DB::connection();
+        $coordinator->beginTransaction();
 
         try {
-            $default->table('sanctum_scan_exchanges')
+            $coordinator->table('sanctum_scan_exchanges')
                 ->where('id', $this->exchangeId)
                 ->lockForUpdate()
                 ->first();
 
-            $probe->statement('SET SESSION innodb_lock_wait_timeout = 1');
-            $probe->beginTransaction();
+            foreach ($this->workerProcesses as $process) {
+                $process->start();
+            }
 
-            try {
-                $probe->table('sanctum_scan_exchanges')
-                    ->where('id', $this->exchangeId)
-                    ->lockForUpdate()
-                    ->first();
+            $this->waitForBarrierFiles([
+                'verified.ready',
+                'rejected.ready',
+            ]);
 
-                $this->fail('A second writer must not acquire the exchange row lock while it is held.');
-            } catch (QueryException $exception) {
-                $this->assertSame(
-                    1205,
-                    (int) ($exception->errorInfo[1] ?? 0),
-                    'Expected an InnoDB lock wait timeout, got: '.$exception->getMessage()
-                );
-            } finally {
-                $probe->rollBack();
+            file_put_contents($this->barrierDirectory.'/start', 'go', LOCK_EX);
+
+            // Each worker writes its marker immediately before executing the
+            // manager's SELECT ... FOR UPDATE. The coordinator still owns the
+            // row lock, so both manager transactions are queued concurrently.
+            $this->waitForBarrierFiles([
+                'verified.lock-query-started',
+                'rejected.lock-query-started',
+            ]);
+
+            // Let both workers leave their before-execution callbacks and send
+            // the SQL statements while the coordinator still owns the lock.
+            usleep(200000);
+
+            $coordinator->commit();
+
+            foreach ($this->workerProcesses as $process) {
+                $process->wait();
             }
         } finally {
-            $default->commit();
+            if ($coordinator->transactionLevel() > 0) {
+                $coordinator->rollBack();
+            }
+
+            foreach ($this->workerProcesses as $process) {
+                if ($process->isRunning()) {
+                    $process->stop(1);
+                }
+            }
         }
 
-        $manager = app(ExchangeSettlementManager::class);
-        $exchange = SanctumScanExchange::query()->findOrFail($this->exchangeId);
+        $results = [];
 
-        $winner = $manager->transition(
-            $exchange,
-            'payment_verified',
-            'admin',
-            1,
-            'First operator reconciled the settlement statement.',
-            'payment_evidence_submitted'
-        );
-        $this->assertTrue($winner->ok);
+        foreach ($this->workerProcesses as $name => $process) {
+            $this->assertTrue(
+                $process->isSuccessful(),
+                sprintf(
+                    'The %s worker failed. STDOUT: %s STDERR: %s',
+                    $name,
+                    $process->getOutput(),
+                    $process->getErrorOutput()
+                )
+            );
 
-        $loser = $manager->transition(
-            $exchange->fresh(),
-            'payment_rejected',
-            'admin',
-            2,
-            'Second operator acted on a stale expected status.',
-            'payment_evidence_submitted'
-        );
-        $this->assertFalse($loser->ok);
-        $this->assertSame('stale_expected_status', $loser->error);
+            $results[$name] = json_decode(
+                trim($process->getOutput()),
+                true,
+                512,
+                JSON_THROW_ON_ERROR
+            );
+        }
 
-        $this->assertSame(
-            'payment_verified',
-            DB::table('sanctum_scan_exchanges')->where('id', $this->exchangeId)->value('settlement_status')
-        );
-        $this->assertSame(1, DB::table('sanctum_scan_exchange_events')
+        $winners = array_values(array_filter(
+            $results,
+            fn (array $result): bool => $result['ok'] === true
+        ));
+        $losers = array_values(array_filter(
+            $results,
+            fn (array $result): bool => $result['ok'] === false
+        ));
+
+        $this->assertCount(1, $winners, 'Exactly one competing transition must succeed.');
+        $this->assertCount(1, $losers, 'Exactly one competing transition must lose.');
+        $this->assertSame('stale_expected_status', $losers[0]['error']);
+
+        $finalStatus = DB::table('sanctum_scan_exchanges')
+            ->where('id', $this->exchangeId)
+            ->value('settlement_status');
+
+        $this->assertContains($finalStatus, ['payment_verified', 'payment_rejected']);
+        $this->assertSame($winners[0]['to'], $finalStatus);
+
+        $events = DB::table('sanctum_scan_exchange_events')
             ->where('exchange_id', $this->exchangeId)
             ->where('event_type', 'settlement_status_changed')
-            ->count());
+            ->get();
+
+        $this->assertCount(1, $events, 'Only the winning decision may append a settlement event.');
+
+        $event = $events->first();
+        $eventData = json_decode((string) $event->event_data, true, 512, JSON_THROW_ON_ERROR);
+
+        $this->assertSame('payment_evidence_submitted', $eventData['from']);
+        $this->assertSame($finalStatus, $eventData['to']);
+        $this->assertSame((int) $winners[0]['actor_id'], (int) $event->recorded_by_id);
+        $this->assertSame('admin', $event->recorded_by_guard);
+    }
+
+    private function waitForBarrierFiles(array $fileNames, int $timeoutSeconds = 15): void
+    {
+        $deadline = microtime(true) + $timeoutSeconds;
+
+        do {
+            $missing = array_values(array_filter(
+                $fileNames,
+                fn (string $fileName): bool => ! is_file($this->barrierDirectory.'/'.$fileName)
+            ));
+
+            if ($missing === []) {
+                return;
+            }
+
+            foreach ($this->workerProcesses as $name => $process) {
+                if (! $process->isRunning() && $process->getExitCode() !== null) {
+                    $this->fail(sprintf(
+                        'The %s worker exited before reaching the concurrency barrier. STDOUT: %s STDERR: %s',
+                        $name,
+                        $process->getOutput(),
+                        $process->getErrorOutput()
+                    ));
+                }
+            }
+
+            usleep(10000);
+        } while (microtime(true) < $deadline);
+
+        $this->fail('Timed out waiting for concurrency barrier files: '.implode(', ', $missing));
     }
 
     protected function tearDown(): void
     {
+        foreach ($this->workerProcesses as $process) {
+            if ($process->isRunning()) {
+                $process->stop(1);
+            }
+        }
+
+        if ($this->barrierDirectory !== null && is_dir($this->barrierDirectory)) {
+            foreach (glob($this->barrierDirectory.DIRECTORY_SEPARATOR.'*') ?: [] as $file) {
+                if (is_file($file)) {
+                    unlink($file);
+                }
+            }
+
+            rmdir($this->barrierDirectory);
+        }
+
         if ($this->exchangeId !== null) {
             DB::table('sanctum_scan_exchange_events')->where('exchange_id', $this->exchangeId)->delete();
             DB::table('sanctum_scan_exchange_payment_evidence')->where('exchange_id', $this->exchangeId)->delete();
@@ -201,8 +333,6 @@ class SettlementConcurrencyTest extends TestCase
         if ($this->merchantId !== null) {
             DB::table('merchants')->where('id', $this->merchantId)->delete();
         }
-
-        DB::purge('settlement_probe');
 
         parent::tearDown();
     }
