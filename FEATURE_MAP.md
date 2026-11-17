@@ -1,18 +1,24 @@
 # Feature Map — QRPay / Sanctum Scan
 
-**Status:** QODOR-001 reconnaissance baseline  
-**Date:** 2026-11-15  
-**Branch:** `feature/qrpay-update` at `4ddb392`
+**Status:** Continuously reconciled feature map  
+**Date:** 2026-11-17  
+**Branch:** `main` at `e9cdf766`; M020 in progress on `sanctum-scan/m020-evidence-decision-binding`
 
 ## Status legend
 
+Milestone status follows ADR 0017:
+
 | Label | Meaning |
 |---|---|
-| **Implemented (static)** | Routes, controllers, services, and models exist in the examined revision; not executed end-to-end. |
-| **Implemented + tested** | Code exists and has an automated test in this repository. Tests were not executable at HEAD because of the boot blocker. |
-| **Partial** | Some layers exist, but the capability is not wired end-to-end. |
-| **Docs only** | Described in documentation but no implementation found. |
-| **Not implemented** | Explicitly future/deferred. |
+| **Planned** | Agreed, not started. |
+| **In progress** | Code or documentation is being developed on a branch; not merged. |
+| **Implemented** | Merged code path exists; this does not claim verification. |
+| **Verified** | Named automated checks pass in CI and required manual evidence is recorded. |
+| **Retired** | Intentionally removed; the superseding record is linked. |
+
+Legacy QRPay feature entries marked “Implemented (static)” are inventory findings,
+not a declaration that the inherited feature set is production-ready or tested.
+
 
 ---
 
@@ -126,7 +132,7 @@ All entries are **Implemented (static)** unless noted. Legacy features have no a
 | M019 | Settlement evidence versioning | Implemented: append-only version chain and buyer-only resubmission after rejection | `SettlementLifecycleTest`, `PaymentEvidenceVersioningMigrationTest` | ADR 0018; unsafe rollback after multiple versions remains a limitation |
 | M020 | Evidence-version-bound settlement decisions | In progress on M020 branch: immutable decisions bind exact evidence ID/version/fingerprint | `SettlementLifecycleTest` assertions added; execution pending | ADR 0019; no schema migration required |
 
-**Coupling fact:** M002–M015 services do not move funds and do not read/write legacy wallet or transaction tables. Preserve this boundary.
+**Coupling fact:** M002–M020 Sanctum Scan services do not move funds and do not read/write legacy wallet or transaction tables. Preserve this boundary.
 
 ---
 
@@ -174,8 +180,8 @@ There is no documented server-to-server merchant settlement webhook in the QR ga
 3. Buyer lists and accepts or declines. Acceptance snapshots the agreement; the offer cannot be accepted after expiry or resource archival.
 4. Merchant dispatches after acceptance.
 5. Buyer confirms receipt after dispatch.
-6. Buyer submits one payment reference (rail, reference, amount, currency). It must match the agreed amount/currency and remains unverified.
-7. Submitting the reference advances settlement `awaiting_payment -> payment_evidence_submitted` in the same transaction. An administrator may then verify/reject the evidence and record settlement; no step moves funds.
+6. Buyer submits payment evidence (rail, reference, amount, currency). It must match the agreed amount/currency and remains unverified. After an administrator rejects a version, the buyer may append a replacement version; prior evidence is not overwritten.
+7. Submitting evidence advances settlement `awaiting_payment -> payment_evidence_submitted` (or `payment_rejected -> payment_evidence_submitted` for a buyer resubmission) in the same transaction. Administrator verification, rejection and settlement events identify the exact evidence version and its SHA-256 fingerprint; no step moves funds.
 8. Declining, cancelling, or expiring an exchange before verification cancels settlement. Buyer and merchant responses expose the settlement status; public scan payloads do not.
 
 ### 3.6 Dispute and verification
@@ -220,8 +226,8 @@ There is no documented server-to-server merchant settlement webhook in the QR ga
 | Scan reference resolution | [`ScanReferenceResolutionTest.php`](tests/Feature/SanctumScan/ScanReferenceResolutionTest.php) | No HTTP contract test; no malformed/hash timing tests |
 | Merchant reference lifecycle | [`MerchantScanReferenceLifecycleTest.php`](tests/Feature/SanctumScan/MerchantScanReferenceLifecycleTest.php) | No admin/ops lifecycle tests |
 | Economic resource registry | [`EconomicResourceRegistryTest.php`](tests/Feature/SanctumScan/EconomicResourceRegistryTest.php) | No QR image generation test; no public page rendering test |
-| Exchange/dispute/evidence/verification/identity | [`EconomicExchangeLifecycleTest.php`](tests/Feature/SanctumScan/EconomicExchangeLifecycleTest.php) (35 methods) | No concurrency; no admin role/2FA tests |
-| Settlement | [`SettlementStateMachineTest.php`](tests/Unit/SanctumScan/SettlementStateMachineTest.php), [`SettlementLifecycleTest.php`](tests/Feature/SanctumScan/SettlementLifecycleTest.php), [`SettlementBackfillMigrationTest.php`](tests/Feature/SanctumScan/SettlementBackfillMigrationTest.php), [`SettlementConcurrencyTest.php`](tests/Feature/SanctumScan/SettlementConcurrencyTest.php) | MySQL concurrency test is skipped outside MySQL; legacy duplicate route names remain outside the Sanctum namespace |
+| Exchange/dispute/evidence/verification/identity | [`EconomicExchangeLifecycleTest.php`](tests/Feature/SanctumScan/EconomicExchangeLifecycleTest.php) | Domain lifecycle and governance coverage; manager-level concurrency coverage remains a separate M022 task |
+| Settlement | [`SettlementStateMachineTest.php`](tests/Unit/SanctumScan/SettlementStateMachineTest.php), [`SettlementLifecycleTest.php`](tests/Feature/SanctumScan/SettlementLifecycleTest.php), [`SettlementBackfillMigrationTest.php`](tests/Feature/SanctumScan/SettlementBackfillMigrationTest.php), [`SettlementConcurrencyTest.php`](tests/Feature/SanctumScan/SettlementConcurrencyTest.php) | MySQL test currently proves lock contention and stale expected-status handling sequentially; simultaneous competing manager transitions are still M022. It is skipped outside MySQL. |
 | Environment template | [`EnvironmentTemplateSecurityTest.php`](tests/Feature/EnvironmentTemplateSecurityTest.php) | Does not boot the full app in the current revision |
 | Legacy commerce | None | Entire legacy surface untested |
 | Webhooks | None | Signature/authorization tests absent |
@@ -232,17 +238,15 @@ There is no documented server-to-server merchant settlement webhook in the QR ga
 
 ## 6. Documentation drift and inconsistencies
 
-| Claim | Reality in this revision |
+| Previously reported claim | Current repository evidence / remaining action |
 |---|---|
-| Roadmap/README: M012–M014 implemented | No provenance export route/service/command exists on this branch (`grep` found none). |
-| Roadmap: M016 “Planned / not started” | Implemented and verified on this branch: table-driven service, buyer/admin wiring, migration backfill, lifecycle and matrix tests; no funds move. |
-| Roadmap: M015 “In progress, not merged” | M015 code and tests are present; duplicate route registration removed, superseded controller remains unreferenced. |
-| ADR 0014 referenced by roadmap | File is absent. |
-| ADR 0012: gate returns 422 | Implementation and API doc return 403 (`buyer_identity_unverified`). |
-| ADR 0015: gate optional | Matches code, but conflicts with ADR 0012 framing/status code. |
-| Roadmap maps M012→ADR 0012 and M013→ADR 0013 | Those ADRs cover identity prerequisites and quantity visibility, not provenance. |
-| README: “Implemented protocol slices” | True for M002–M011 and M015–M016; M012–M014 are branch-only/absent. |
-| API docs | Generally align with code for M002–M011, M015, and the M016 admin endpoint; the buyer payment-reference response now includes settlement status. |
+| M012–M014 were docs-only or absent | Superseded by merged code: participant-scoped provenance export route/controller and lifecycle test; offline verifier Artisan command and unit/command tests; structural consistency hardening. See `SanctumScanDisputeEvidenceController::provenanceExport`, `ProvenanceManifestVerifier`, and the M012–M014 test/doc records. |
+| M016 settlement was planned or incomplete | Superseded by merged implementation: typed state machine, locked manager, buyer evidence transition, administrator endpoint, participant projections, backfill and tests. It records settlement assertions and moves no funds. |
+| M015 remained in progress with duplicate identity controller | Superseded by M018: the duplicate controller was removed; the real admin middleware stack is exercised by `AdminOperatorMiddlewareTest`; the implemented identity-gate contract is 403. |
+| ADR 0014 was missing | A legacy proposed provenance-hardening note exists at `docs/architecture/decisions/0014-provenance-verifier-consistency-hardening.md`; it conflicts with the canonical ADR index, which reserves 0014. M021 must reconcile the legacy 0012/0013/0014 provenance notes without rewriting accepted identity/quantity ADRs or breaking links. |
+| Provenance ADR links pointed to identity/quantity ADRs | The legacy proposed participant-export and offline-verifier notes use duplicate IDs 0012 and 0013. Canonical new decisions live in `docs/decisions/README.md`; duplicate legacy identifiers are tracked for M021. |
+| API docs did not reflect current settlement behavior | Buyer/merchant payment-evidence projections expose the latest version; admin history includes all versions; M020 adds evidence ID/version/fingerprint to settlement decision events. |
+| Settlement evidence versioning has no rollback caveat | ADR 0018 documents that `down()` cannot restore a one-row-per-exchange constraint once multiple versions exist without destroying history. Explicit fail-safe rollback enforcement and tests remain M023. |
 
 ---
 
