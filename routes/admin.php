@@ -45,6 +45,7 @@ use App\Http\Controllers\Admin\RemitanceController;
 use App\Http\Controllers\Admin\RequestMoneyController;
 use App\Http\Controllers\Admin\SanctumScanEvidenceReviewController;
 use App\Http\Controllers\Admin\SanctumScanExchangeSettlementController;
+use App\Http\Controllers\Admin\SanctumScanReconciliationController;
 use App\Http\Controllers\Admin\SanctumScanUserIdentityReviewController;
 use App\Http\Controllers\Admin\SanctumScanVerifierRegistryController;
 use App\Http\Controllers\Admin\SendMoneyController;
@@ -106,6 +107,15 @@ Route::name('admin.')->group(function () {
                 Route::get('/gate', 'showGate')->name('gate.show');
                 Route::put('/gate', 'updateGate')->name('gate.update');
                 Route::post('/{userId}', 'store')->whereNumber('userId')->name('store');
+            });
+
+        // M024 — Read-only operator reconciliation workspace.
+        Route::controller(SanctumScanReconciliationController::class)
+            ->prefix('sanctum/reconciliation')
+            ->name('sanctum.reconciliation.')
+            ->group(function () {
+                Route::get('/', 'index')->name('index');
+                Route::get('/{exchangeId}', 'show')->whereNumber('exchangeId')->name('show');
             });
 
         // M016 — Settlement status administration. Records truth only; no funds move.
