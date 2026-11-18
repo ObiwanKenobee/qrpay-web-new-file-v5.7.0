@@ -1,12 +1,12 @@
 <?php
 
-namespace App\\Http\\Middleware;
+namespace App\Http\Middleware;
 
 use Closure;
 use Exception;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class InstallationHostGuard
 {
@@ -16,11 +16,11 @@ class InstallationHostGuard
      * The installer has been removed. A host mismatch is therefore rejected
      * directly instead of redirecting every request to a missing installer.
      *
-     * @param  \\Closure(\\Illuminate\\Http\\Request): (\\Illuminate\\Http\\Response|\\Illuminate\\Http\\RedirectResponse)  $next
+     * @param  \Closure(\Illuminate\Http\Request): (\Illuminate\Http\Response|\Illuminate\Http\RedirectResponse)  $next
      */
     public function handle(Request $request, Closure $next)
     {
-        $clientHost = preg_replace('/^www\\./', '', $request->getHttpHost());
+        $clientHost = preg_replace('/^www\./', '', $request->getHttpHost());
         $hostMismatch = false;
 
         try {
