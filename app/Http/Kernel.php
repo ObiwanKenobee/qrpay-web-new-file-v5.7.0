@@ -39,7 +39,8 @@ class Kernel extends HttpKernel
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
             \App\Http\Middleware\Admin\Localization::class,
             // \App\Http\Middleware\LanguageMiddleware::class,
-            \App\Http\Middleware\StartingPoint::class,
+            // Keep host validation without redirecting to the removed installer.
+            \App\Http\Middleware\InstallationHostGuard::class,
             \App\Http\Middleware\RateLimiter::class,
         ],
 
