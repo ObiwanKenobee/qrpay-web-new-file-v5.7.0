@@ -141,7 +141,7 @@
                                     <img src="{{ get_image($payment_link->image, 'payment-link-image') }}"
                                         alt="Link Image">
                                 @else
-                                    <img src="{{ get_image('frontend/images/logo/link_icon.png') }}" alt="Link Image">
+                                    <img src="{{ get_logo($basic_settings) }}" alt="Link Image">
                                 @endif
                             </div>
                         @endif

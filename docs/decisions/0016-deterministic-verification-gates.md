@@ -109,7 +109,8 @@ Adopted allowlists (amendment 2026-11-16), all in
 `tools/route-registry-allowlist.php` and all shrink-only — the test fails when
 an entry no longer matches a violation:
 
-- **duplicate names** — the 14 legacy names tracked as R-26;
+- **duplicate names** — empty since 2026-11-18; the 14 legacy duplicates
+  tracked as R-26 were renamed so `route:cache` can be used in production;
 - **public write routes** — 25 existing middleware-free POST routes (global
   lookups, provider callbacks, installer steps, standalone payment pages);
 - **unresolvable actions** — 4 dead routes whose controller method is missing

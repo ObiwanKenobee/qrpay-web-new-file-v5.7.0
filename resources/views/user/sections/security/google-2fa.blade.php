@@ -73,7 +73,7 @@
                             <p>{{ __('Google Authenticator is a product based authenticator by Google that executes two-venture confirmation administrations for verifying clients of any programming applications') }}.
                             </p>
                             <div class="play-store-thumb text-center mb-20">
-                                <img class="mx-auto" src="{{ get_image('frontend/') }}/images/element/play-store.png">
+                                <img class="mx-auto" src="{{ get_image('frontend/images/element/play-store.png') }}">
                             </div>
                             <a href="https://play.google.com/store/apps"
                                 class="btn--base mt-10 w-100">{{ __('Download App') }}</a>

@@ -42,7 +42,8 @@ Pint on that set.
 
 `tools/route-registry-allowlist.php` records three kinds of tracked debt:
 
-- 14 legacy duplicate route names (R-26);
+- legacy duplicate route names (R-26) — the list is now empty after the
+  2026-11-18 rename, and duplicates fail the gate outright;
 - 25 middleware-free state-changing routes that are intentional public surface
   (global lookups, provider callbacks, installer steps, standalone payment
   pages);

@@ -44,10 +44,10 @@ These derive from the accepted ADRs and the existing module design. They must no
 | Pint | Enforced on changed files | `tools/verify.sh` (G8) |
 | Static analysis | **Absent** — deferred, no gate claimed | No PHPStan/Larastan dependency or config (R-10) |
 | Dependency audit | Enforced with a reviewed advisory allowlist | `tools/check-dependency-audit.php` (G7, R-28) |
-| Route name uniqueness | Enforced globally with shrink-only legacy allowlist | `RouteRegistryTest` (G5, R-26) |
+| Route name uniqueness | Enforced globally; allowlist empty since R-26 resolved | `RouteRegistryTest` (G5) |
 | Route/middleware inventory | Enforced for state-changing routes | `RouteRegistryTest` + `tools/route-registry-allowlist.php` |
 | Frontend build reproducibility | **Absent** — no lockfile, no build gate | `package.json` tracked without `package-lock.json` (R-15) |
-| Deployment/rollback docs | **Absent** | No Dockerfile, deploy script, or runbook besides README prose |
+| Deployment/rollback docs | AWS EC2 runbook tracked; no release automation | [`docs/operations/aws-ec2-deployment.md`](docs/operations/aws-ec2-deployment.md) (R-24) |
 
 ---
 

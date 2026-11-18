@@ -13,6 +13,9 @@
     $s_platform     = Agent::platform();
     $s_agent        = request()->header('User-Agent');
 
+    $seo_image      = get_image(@$seo_data->image, 'seo');
+    $seo_image_file = storage_path('app/public/' . files_path('seo')->path . '/' . @$seo_data->image);
+    $seo_image_size = is_file($seo_image_file) ? @getimagesize($seo_image_file) : null;
 @endphp
 <!DOCTYPE html>
 <html lang="{{ get_default_language_code() }}">
@@ -21,12 +24,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="description" content="{{ __(@$seo_data->desc) }}">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="{{ @$basic_settings->site_name }}">
+    <meta property="og:url" content="{{ url()->current() }}">
     <meta property="og:title" content="{{ __(@$seo_data->title) }}">
     <meta name="keywords" content="{{ implode(',',@$seo_data->tags) }}">
     <meta property="og:description" content="{{ __(@$seo_data->desc) }}">
-    <meta property="og:image" content="{{get_image(@$seo_data->image,'seo') }}">
-    <meta property="og:image:width" content="140">
-    <meta property="og:image:height" content="80">
+    <meta property="og:image" content="{{ $seo_image }}">
+    <meta property="og:image:alt" content="{{ __(@$seo_data->title) }}">
+    @if ($seo_image_size)
+        <meta property="og:image:width" content="{{ $seo_image_size[0] }}">
+        <meta property="og:image:height" content="{{ $seo_image_size[1] }}">
+    @endif
 
     @if (Route::currentRouteName() === 'agent')
         <title>{{ $basic_settings->sitenameAgent(__($page_title??'')) }}</title>
