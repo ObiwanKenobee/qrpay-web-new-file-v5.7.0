@@ -29,3 +29,6 @@ yarn-error.log
 # macOS Finder metadata
 .DS_Store
 **/.DS_Store
+
+# Local database exports (never commit local or production data)
+/database/local-dumps/
