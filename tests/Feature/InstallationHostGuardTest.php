@@ -20,7 +20,7 @@ class InstallationHostGuardTest extends TestCase
             ->andReturn(false);
 
         $response = (new InstallationHostGuard())->handle(
-            Request::create('https://sanctum.test/', 'GET'),
+            Request::create('https://sanctum.example.com/', 'GET'),
             fn () => response('homepage')
         );
 
@@ -44,10 +44,37 @@ class InstallationHostGuardTest extends TestCase
 
         $query->shouldReceive('first')
             ->once()
-            ->andReturn((object) ['client' => 'sanctum.test']);
+            ->andReturn((object) ['client' => 'sanctum.example.com']);
 
         $response = (new InstallationHostGuard())->handle(
-            Request::create('https://www.sanctum.test/', 'GET'),
+            Request::create('https://www.sanctum.example.com/', 'GET'),
+            fn () => response('homepage')
+        );
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('homepage', $response->getContent());
+    }
+
+    public function test_it_allows_loopback_hosts_in_local_testing_environments(): void
+    {
+        $query = Mockery::mock();
+
+        Schema::shouldReceive('hasTable')
+            ->once()
+            ->with('script')
+            ->andReturn(true);
+
+        DB::shouldReceive('table')
+            ->once()
+            ->with('script')
+            ->andReturn($query);
+
+        $query->shouldReceive('first')
+            ->once()
+            ->andReturn((object) ['client' => 'production.example.com']);
+
+        $response = (new InstallationHostGuard())->handle(
+            Request::create('http://127.0.0.1:8000/', 'GET'),
             fn () => response('homepage')
         );
 
@@ -71,11 +98,11 @@ class InstallationHostGuardTest extends TestCase
 
         $query->shouldReceive('first')
             ->once()
-            ->andReturn((object) ['client' => 'licensed.sanctum.test']);
+            ->andReturn((object) ['client' => 'licensed.example.com']);
 
         try {
             (new InstallationHostGuard())->handle(
-                Request::create('https://unlicensed.sanctum.test/', 'GET'),
+                Request::create('https://unlicensed.example.com/', 'GET'),
                 fn () => response('homepage')
             );
 
@@ -94,7 +121,7 @@ class InstallationHostGuardTest extends TestCase
 
         try {
             (new InstallationHostGuard())->handle(
-                Request::create('https://sanctum.test/', 'GET'),
+                Request::create('https://sanctum.example.com/', 'GET'),
                 fn () => response('homepage')
             );
 
