@@ -15,7 +15,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${PROJECT_ROOT}"
 
 PHP_BIN="${PHP_BIN:-php}"
-HOST="${SANCTUM_HOST:-127.0.0.1}"
+HOST="127.0.0.1"
 PORT="${SANCTUM_PORT:-8000}"
 
 fail() {
