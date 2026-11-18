@@ -91,6 +91,9 @@ class Kernel extends HttpKernel
             Localization::class,
             // \App\Http\Middleware\LanguageMiddleware::class,
             RateLimiter::class,
+            // Keep host validation without redirecting to the removed installer.
+            \App\Http\Middleware\InstallationHostGuard::class,
+            \App\Http\Middleware\RateLimiter::class,
         ],
 
         'api' => [
