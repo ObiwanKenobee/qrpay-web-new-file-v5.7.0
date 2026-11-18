@@ -81,7 +81,6 @@ class RouteServiceProvider extends ServiceProvider
             Route::middleware(['web','system.maintenance'])
             ->group(base_path('routes/payment-gateway/qr_pay/v1/checkout.php'));
 
-            $
         });
     }
 
