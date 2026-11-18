@@ -11,16 +11,21 @@ use Illuminate\Support\Facades\Schema;
 class InstallationHostGuard
 {
     /**
-     * Ensure an existing installation is accessed through its registered host.
+     * Ensure an existing production installation is accessed through its registered host.
      *
-     * The installer has been removed. A host mismatch is therefore rejected
-     * directly instead of redirecting every request to a missing installer.
+     * Local loopback and .test hosts are allowed for local/testing environments so
+     * developers can run the application without changing the production host record.
      *
      * @param  \Closure(\Illuminate\Http\Request): (\Illuminate\Http\Response|\Illuminate\Http\RedirectResponse)  $next
      */
     public function handle(Request $request, Closure $next)
     {
-        $clientHost = preg_replace('/^www\./', '', $request->getHttpHost());
+        $clientHost = strtolower($request->getHost());
+        $clientHost = preg_replace('/^www\./', '', $clientHost);
+
+        $isLocalDevelopmentHost = in_array($clientHost, ['localhost', '127.0.0.1', '::1'], true)
+            || str_ends_with($clientHost, '.test');
+        $enforceRegisteredHost = ! (app()->environment(['local', 'testing']) && $isLocalDevelopmentHost);
         $hostMismatch = false;
 
         try {
@@ -28,7 +33,8 @@ class InstallationHostGuard
                 $installation = DB::table('script')->first();
 
                 $hostMismatch = $installation
-                    && $clientHost !== $installation->client;
+                    && $enforceRegisteredHost
+                    && $clientHost !== strtolower((string) $installation->client);
             }
         } catch (Exception $exception) {
             report($exception);
