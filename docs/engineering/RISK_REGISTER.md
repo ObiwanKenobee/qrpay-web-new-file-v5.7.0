@@ -117,7 +117,7 @@ Likelihood/impact are engineering judgements unless marked **verified**. “Veri
 - **Impact:** Medium-High — ambiguous authorization, inconsistent validation, maintenance hazard
 - **Evidence:** `SanctumScanUserIdentityController` and `SanctumScanUserIdentityReviewController` both exist; two admin route groups use the `sanctum.identity-checks.` name prefix ([`routes/admin.php:100`](../../routes/admin.php#L100), `:167`), producing duplicate `index`/`store` names. Validation differs (`status` vs `review_status`; summary minimum length).
 - **Mitigation:** Choose one controller/contract, remove the duplicate, and add a route-name uniqueness test.
-- **Status:** Resolved 2026-11-16 for the Sanctum surface — the duplicate admin identity route block and the superseded `SanctumScanUserIdentityController` were removed; `RouteRegistryTest` asserts Sanctum route-name uniqueness. Fourteen legacy duplicate names remain outside the Sanctum namespace (R-26).
+- **Status:** Resolved 2026-11-16 for the Sanctum surface — the duplicate admin identity route block and the superseded `SanctumScanUserIdentityController` were removed; `RouteRegistryTest` asserts global route-name uniqueness. The 14 legacy duplicates outside the Sanctum namespace were also renamed on 2026-11-18 (R-26).
 
 ### R-13 — Documentation and milestone status are not trustworthy
 
@@ -200,23 +200,23 @@ Likelihood/impact are engineering judgements unless marked **verified**. “Veri
 - **Evidence:** No root `LICENSE`; `composer.json` says MIT but the repository has a commercial lineage; custom SDK; README says redistribution rights are unresolved ([`docs/security/source-provenance.md`](../security/source-provenance.md)).
 - **Mitigation:** Complete provenance review before relicensing or redistributing; do not claim the inherited application is open source.
 
-### R-24 — Deployment/rollback documentation absent
+### R-24 — Deployment/rollback documentation
 
-- **Evidence:** No Dockerfile, deploy script, release checklist, or rollback procedure; root rewrite fallback and public front controller both exist.
+- **Evidence:** No Dockerfile or deploy script; root rewrite fallback and public front controller both exist.
 - **Mitigation:** Document the authoritative topology, migration/rollback steps, queue/scheduler supervision, backup/restore, and health checks.
+- **Status:** Partially mitigated 2026-11-18 — [`docs/operations/aws-ec2-deployment.md`](../operations/aws-ec2-deployment.md) documents a single-instance EC2/Nginx/MySQL deployment: install sequence, seeding, Passport keys, scheduler cron, queue worker, cache ordering, verification, updates, and rollback. A release script and multi-instance topology remain open.
 
 ### R-25 — Broad middleware bypass surface
 
 - **Evidence:** 51 `withoutMiddleware` usages across route files; some remove the entire `web` group for callbacks.
 - **Mitigation:** Require a justification and compensating control for each bypass; add an allowlist and tests.
 
-### R-26 — Fourteen legacy route names are duplicated
+### R-26 — Fourteen legacy route names were duplicated
 
-- **Likelihood:** Certain (verified 2026-11-16)
-- **Impact:** Medium — a global route-name uniqueness gate (ADR 0016 G5) cannot pass until they are renamed; ambiguous URL generation
-- **Evidence:** `RouteRegistryTest` reports duplicate names in the legacy surface, including `api.user.add.money.payment.global.*`, `api.agent.add.money.payment.global.*`, `user.add.money.payment.global.*`, `agent.add.money.payment.global.*`, `payment-link.gateway.payment.global.*`, `user.qr.scan`, `request.money.`, and `qrpay.pay.`. Sanctum Scan names are unique.
-- **Mitigation:** Rename the legacy duplicates in a dedicated change after confirming no external client depends on the names; then promote the uniqueness test from Sanctum-scoped to global.
-- **Status:** Open
+- **Likelihood:** Resolved
+- **Impact:** Medium — duplicate names blocked `php artisan route:cache`, so production could not use the compiled route table
+- **Evidence:** Resolved 2026-11-18. POST counterparts of the gateway return/cancel routes now carry a `.post` suffix (URIs unchanged, so every `route()` call and external callback URL resolves identically); the unnamed `request.money.*` and `qrpay.pay.*` API routes were given explicit names; the colliding `user.qr.scan` and `user.strowallet.virtual.card.create` GET/POST pairs were renamed. `RouteRegistryTest` asserts global route-name uniqueness with an empty allowlist, and `php artisan route:cache` succeeds.
+- **Status:** Resolved 2026-11-18
 
 ### R-27 — Settlement HTTP tests disable admin operator middleware
 
@@ -260,6 +260,6 @@ Likelihood/impact are engineering judgements unless marked **verified**. “Veri
 4. **R-08 / R-09** — financial-path review and concurrency characterization before any refactor.
 5. **R-10 / R-19** — migration-backed MySQL tests and PHPStan ratchet. ~~R-27 production-middleware coverage~~ resolved 2026-11-16 (M018).
 6. ~~**R-11** — complete the settlement slice (QODOR-002).~~ Resolved 2026-11-16; MySQL job wired in M017 and green locally 2026-11-17.
-7. **R-13 / R-26 / R-29 / R-30** — finish legacy duplicate/dead-route cleanup, data-dependent route introspection, and remaining documentation reconciliation. ~~R-12 / R-17~~ resolved 2026-11-16 (M018).
+7. **R-13 / R-29 / R-30** — finish legacy dead-route cleanup, data-dependent route introspection, and remaining documentation reconciliation. ~~R-12 / R-17~~ resolved 2026-11-16 (M018); ~~R-26~~ resolved 2026-11-18.
 8. **R-14 / R-15 / R-16 / R-18 / R-28** — hardening and dependency follow-up.
 9. **R-20–R-25** — operational and maintainability work.

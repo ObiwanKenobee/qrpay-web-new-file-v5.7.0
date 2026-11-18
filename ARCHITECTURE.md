@@ -495,7 +495,7 @@ This fits the existing architecture because it adds no runtime service and no ne
 - Sanctum Scan has no wallet/transaction coupling.
 - Settlement code was orphaned and untested at the examined revision; it is now wired, and the full suite is green.
 - Settlement transitions are exhaustively matrix-tested (144 combinations); MySQL lock contention is covered by a skipped-by-default concurrency test that CI runs explicitly.
-- 14 pre-existing duplicate route names remain in the legacy surface and are allowlisted (R-26); Sanctum Scan route names are unique and asserted by a test.
+- The legacy surface previously had 14 duplicate route names (R-26); they were renamed on 2026-11-18, so route names are globally unique and `route:cache` works. Sanctum Scan route names are asserted by a test.
 - Four legacy routes reference missing controller methods and are allowlisted (R-29); `route:list` needs migrated tables plus the virtual-card singleton fixture, so the MySQL job runs the boot smoke while the test suite asserts the registry.
 - M012–M014 provenance export/verifier code is absent from this revision.
 - ADR 0014 is absent; ADR 0012 and ADR 0015 disagree on the identity-gate status code (422 vs 403; code and API doc use 403).

@@ -11,24 +11,12 @@ declare(strict_types=1);
  */
 
 return [
-    // R-26: legacy route names registered twice. Renaming them can break
-    // generated URLs and external clients, so it needs its own change.
-    'duplicate_names' => [
-        'api.user.add.money.payment.global.success',
-        'api.user.add.money.payment.global.cancel',
-        'request.money.',
-        'api.agent.add.money.payment.global.success',
-        'api.agent.add.money.payment.global.cancel',
-        'payment-link.gateway.payment.global.success',
-        'payment-link.gateway.payment.global.cancel',
-        'user.qr.scan',
-        'user.add.money.payment.global.success',
-        'user.add.money.payment.global.cancel',
-        'user.strowallet.virtual.card.create',
-        'agent.add.money.payment.global.success',
-        'agent.add.money.payment.global.cancel',
-        'qrpay.pay.',
-    ],
+    // R-26: formerly 14 legacy route names registered twice, which blocked
+    // `php artisan route:cache`. Resolution: POST counterparts of gateway
+    // return/cancel routes got a `.post` suffix (identical URIs, so every
+    // generated URL is unchanged), unnamed group-prefixed routes got explicit
+    // names, and the second `qr.scan`/`create` routes were renamed.
+    'duplicate_names' => [],
 
     // Routes whose declared action does not exist. These four are legacy dead
     // endpoints with no view or client reference; removing them changes a 500
@@ -42,10 +30,10 @@ return [
     ],
 
     // State-changing routes with no middleware outside the global web/api
-    // stack. Each is intentional public surface: installer steps, public
-    // location lookups, provider callbacks authenticated inside the handler,
-    // or the standalone QRPay payment pages. Security review of these routes
-    // is tracked separately (R-03/R-04/R-05).
+    // stack. Each is intentional public surface: public location lookups,
+    // provider callbacks authenticated inside the handler, or the standalone
+    // QRPay payment pages. Security review of these routes is tracked
+    // separately (R-03/R-04/R-05).
     'public_write_routes' => [
         'POST global/get-states',
         'POST global/get-cities',
@@ -68,9 +56,5 @@ return [
         'POST pay/v1/user/authentication/form/submit/{token}',
         'POST pay/v1/user/authentication/mail/verify/submit/{token}',
         'POST pay/v1/user/payment/preview/submit/{token}',
-        'POST project/install/validation/form/submit',
-        'POST project/install/database/config/submit',
-        'POST project/install/migration/submit',
-        'POST project/install/admin/account/setting/submit',
     ],
 ];

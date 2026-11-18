@@ -16,8 +16,12 @@ return new class extends Migration
             $table->string('review_status', 30); // verified | rejected | unable_to_verify
             $table->text('summary');
             $table->unsignedBigInteger('reviewed_by_admin_id');
-            $table->timestamp('reviewed_at');
-            $table->timestamp('created_at');
+            // MariaDB (explicit_defaults_for_timestamp=0) rejects a second
+            // NOT NULL TIMESTAMP without an explicit default. Both values are
+            // always supplied by UserIdentityCheckManager; these defaults only
+            // make the DDL portable.
+            $table->timestamp('reviewed_at')->useCurrent();
+            $table->timestamp('created_at')->useCurrent();
 
             $table->foreign('user_id')->references('id')->on('users');
             $table->index(['user_id', 'review_status', 'reviewed_at'], 'sanctum_identity_check_user_idx');

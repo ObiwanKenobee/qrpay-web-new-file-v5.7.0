@@ -445,7 +445,8 @@ failure with a tracking task; it may not be silently skipped.
 - [x] Route registry gate enabled: `RouteRegistryTest` asserts global name
       uniqueness, action resolution, and write-route middleware with
       shrink-only allowlists; `route:list --json` runs in the MySQL CI job. The
-      14 legacy duplicates (R-26) and 4 dead routes (R-29) are tracked debt.
+      14 legacy duplicates were renamed (R-26 resolved 2026-11-18) and only the
+      4 dead routes (R-29) remain allowlisted.
 - [x] Transition matrix test is exhaustive and passes (144 combinations).
 - [x] Buyer evidence submission moves settlement state atomically.
 - [x] Admin verify/reject/settle works for active admins via the controller and
