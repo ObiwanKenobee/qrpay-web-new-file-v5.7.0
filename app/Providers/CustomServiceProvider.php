@@ -95,9 +95,6 @@ class CustomServiceProvider extends ServiceProvider
     }
 
     public function startingPoint() {
-        if(config('app.purchase_code') == null) {
-            Config::set('starting-point.status',true);
-            Config::set('starting-point.point','/project/install/welcome');
         }
-    }
+    
 }
