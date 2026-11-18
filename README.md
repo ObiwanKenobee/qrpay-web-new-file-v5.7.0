@@ -16,6 +16,10 @@ The larger ambition is to make economic activity more visible, trustworthy, incl
 
 > **We are not simply building another payment application. We are exploring the infrastructure that enables people and institutions to create, exchange, preserve and multiply value.**
 
+## Local development
+
+To run Sanctum Scan locally with XAMPP MySQL and verify the homepage, follow the [XAMPP local development guide](docs/LOCAL_DEVELOPMENT_XAMPP.md). The launcher is deliberately non-destructive: it never migrates or seeds a database automatically.
+
 ---
 
 ## 1. The Problem
