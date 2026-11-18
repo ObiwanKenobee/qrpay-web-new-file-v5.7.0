@@ -35,19 +35,19 @@ php -v
 
 ## 2. Prepare the project
 
-From the repository root:
+From the repository root, create the local environment file before installing dependencies:
+
+```bash
+cp .env.xampp.example .env
+```
+
+Edit the local database values as shown below, then install dependencies:
 
 ```bash
 composer install
 ```
 
-The repository contains `.env.xampp.example` as a local-only configuration template. The launcher copies it to `.env` the first time it is run, then exits so you can configure the database.
-
-Alternatively, copy it manually:
-
-```bash
-cp .env.xampp.example .env
-```
+If `.env` is absent when the launcher runs, it creates the same template and exits so you can configure the database before proceeding. Never overwrite an already configured `.env` just to refresh the template.
 
 Edit the database values in `.env`:
 
