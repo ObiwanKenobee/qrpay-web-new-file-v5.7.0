@@ -1,14 +1,14 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Http\\Middleware\\InstallationHostGuard;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
+use App\Http\Middleware\InstallationHostGuard;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Mockery;
-use Symfony\\Component\\HttpKernel\\Exception\\HttpException;
-use Tests\\TestCase;
+use Symfony\Component\HttpKernel\Exception\HttpException;
+use Tests\TestCase;
 
 class InstallationHostGuardTest extends TestCase
 {
@@ -90,7 +90,7 @@ class InstallationHostGuardTest extends TestCase
         Schema::shouldReceive('hasTable')
             ->once()
             ->with('script')
-            ->andThrow(new \\RuntimeException('Database connection failed.'));
+            ->andThrow(new \RuntimeException('Database connection failed.'));
 
         try {
             (new InstallationHostGuard())->handle(
