@@ -52,7 +52,6 @@
             "App\\": "app/",
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/",
-            "Project\\Installer\\": "resources/installer/src/"
         },
         "files": [
             "app/Http/Helpers/helpers.php",
