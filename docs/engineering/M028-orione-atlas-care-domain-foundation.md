@@ -3,6 +3,7 @@
 **Status:** In progress — documentation-only design; review pending  
 **Date:** 2026-11-19  
 **Decision:** [ADR 0023 — Atlas Care Domain Boundary and Human-Dignity Guardrails](../decisions/0023-atlas-care-domain-boundary.md)  
+**Review:** [M028 Architecture Review and Acceptance Blockers](M028-architecture-review.md)  
 **Repository:** `ObiwanKenobee/qrpay-web-new-file-v5.7.0`  
 **Base:** `main`  
 **Branch:** `sanctum-scan/m028-orione-atlas-care-architecture`
@@ -127,6 +128,7 @@ flowchart TD
   COMMIT[Care Commitment]
   EVENT[Append-only Event Log]
   OUTCOME[Outcome Observation]
+  SUBJECT[Pseudonymous Care Subject Reference]
   CASE[Restricted Case / Identity Data]
 
   PARTNER --> CAP
@@ -142,7 +144,8 @@ flowchart TD
   INTERVENTION --> EVENT
   COMMIT --> EVENT
   INTERVENTION --> OUTCOME
-  NEED -. restricted reference .-> CASE
+  NEED --> SUBJECT
+  SUBJECT -. restricted identity mapping .-> CASE
 ```
 
 Rules:
@@ -161,18 +164,18 @@ The following are design concepts for review, not approved SQL columns.
 
 ### 5.1 Care Need
 
-Purpose: record a need or opportunity in a way that is understandable, assessable and consent-aware.
+Purpose: record a need or opportunity in a way that is understandable, assessable and rights-aware, without placing direct identity data in the general Need record.
 
 Candidate concepts:
 
-- Stable internal identifier and non-identifying public reference (only if a safe public use is later approved).
+- Stable internal identifier and pseudonymous subject reference. A Care Need has no public reference by default; an approved public project reference is a separate publication boundary.
 - Category and short description.
 - Source and submitter/recording role.
 - Coarse geographic area where necessary.
 - Urgency/impact assessment with stated reasons and author.
 - Status and status history.
-- Consent/notice reference and recording timestamp where appropriate.
-- Restricted case reference when identifying details are necessary.
+- Processing purpose/basis and notice reference; a separate consent record only where consent is required or relied upon.
+- Restricted identity/case reference only where necessary and approved by the pilot privacy review.
 
 Do not make beneficiary names, phone numbers, medical details or precise household coordinates ordinary fields on a publicly readable need record.
 
@@ -436,7 +439,7 @@ M028 makes no legal determination about applicable law, controller status, lawfu
 
 ### 10.1 Consent, notice and processing-basis separation
 
-A consent record and a lawful-basis determination are different things and must not be represented by one boolean or one generic `consented` status. For every data purpose, document the accountable controller/processor roles, purpose, required notice, basis determined by qualified review, data categories, recipients, retention, rights channel and any sharing. Where consent is relied upon, record the specific version and explanation presented, affirmative choice, recording method, actor/time, withdrawal and downstream effect. Where another basis is determined, do not fabricate a consent event; retain the required notice and basis decision. Do not make optional consent a condition of unrelated services or entitlements.
+A consent record and a lawful-basis determination are different things and must not be represented by one boolean or one generic `consented` status. For every data purpose, document the accountable controller/processor roles, purpose, required notice, basis determined by qualified review, data categories, recipients, retention, rights channel and any sharing. Where consent is relied upon, record the specific version and explanation presented, affirmative choice, recording method, actor/time, withdrawal and downstream effect. Where another basis is determined, do not fabricate a consent event; retain the required notice and basis decision. Consistent with the source brief, Atlas Care must require explicit, informed participant consent before collecting or sharing sensitive case details; this safeguard does not replace a separately determined processing basis, notice or safeguarding process. If a participant cannot safely or validly consent, do not collect the sensitive detail through Atlas Care; use an appropriate partner-led process only after qualified review. Do not make optional consent a condition of unrelated services or entitlements.
 
 ### Minimum technical safeguards for later implementation
 
@@ -579,7 +582,8 @@ M028 may be marked **Implemented** as a documentation milestone only when:
 | Subject reference, identity boundary and processing basis | Pending |
 | Partner delegation and revocation | Pending |
 | Privacy, consent, retention, correction and safeguarding | Pending |
-| Complaints, challenge and appeal | Pending | |
+| Complaints, challenge and appeal | Pending |
+| Technical architecture review | Revise before acceptance | See [M028 Architecture Review](M028-architecture-review.md) | |
 | Financial boundary | Pending | |
 | Accessibility and low-connectivity design | Pending | |
 | Initial pilot fit | Pending | |
