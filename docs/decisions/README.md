@@ -48,7 +48,7 @@ only as a compatibility pointer. The provenance decisions use new identifiers
 | 0019 | Evidence-version-bound settlement decisions | Sanctum Scan | `docs/decisions/0019-evidence-version-bound-settlement-decisions.md` |
 | 0020 | Participant-scoped provenance export | Sanctum Scan | `docs/decisions/0020-participant-scoped-provenance-export.md` |
 | 0021 | Offline provenance manifest verification | Sanctum Scan | `docs/decisions/0021-offline-provenance-manifest-verification.md` |
-| 0022 | Provenance verifier consistency hardening | Sanctum Scan | `docs/decisions/0022-provenance-verifier-consistency-hardening.md` |
+| 0022 | Provenance verifier consistency hardening | Sanctum Scan | `docs/decisions/0022-provenance-verifier-consistency-hardening.md` |\n| 0023 | Atlas Care domain boundary and human-dignity guardrails | Atlas Care / Sanctum Scan | `docs/decisions/0023-atlas-care-domain-boundary.md` |
 
 The **Status** of each record is authoritative in the record itself (Proposed,
 Accepted, Implemented, Superseded, or Rejected). This index does not duplicate
