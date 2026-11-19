@@ -58,9 +58,9 @@ These paths are architectural conventions for a later implementation milestone, 
 
 Care services must depend on explicit contracts and selected existing Sanctum Scan capabilities. They must not reach into unrelated legacy controllers, helper functions, wallet models or payment-provider implementation details.
 
-### 2. The Care domain has six logical aggregates
+### 2. The Care domain has five aggregate roots and a cross-cutting event log
 
-The initial domain model consists of the following logical aggregates. This decision does not prescribe final SQL columns or migration order.
+The initial domain model has five proposed aggregate roots. Care events are a cross-cutting append-only record stream, not a sixth aggregate root. This distinction prevents the audit history from becoming a general-purpose mutable object or an oversized aggregate. The concepts below are logical boundaries; this decision does not prescribe final SQL columns or migration order.
 
 | Aggregate | Responsibility | Principal relationships |
 |---|---|---|
@@ -69,11 +69,15 @@ The initial domain model consists of the following logical aggregates. This deci
 | Care Capability | A declared resource a partner can make available | Belongs to a partner; may be proposed for an intervention |
 | Care Intervention | A bounded, human-approved plan responding to one or more needs | Links needs, partners, commitments and outcome observations |
 | Care Commitment | A specific promise to contribute a good, skill, service, time, equipment, transport or other support | Belongs to an intervention and an accountable contributor |
-| Care Event | An append-only record of a consequential action, declaration, review or outcome observation | References its subject and authenticated actor |
+| Care Event Log | A cross-cutting append-only record of consequential actions, declarations, reviews and outcome observations; not an aggregate root | References a subject and authenticated actor without embedding restricted personal data |
 
-A sensitive beneficiary identity or case file is **not** a public property of a Care Need. The implementation design must separate identifying/contact information from broadly accessible need, intervention and reporting records. Where feasible for an initial partner-led pilot, a partner-held case reference should be used instead of collecting a second copy of the person's identity data.
+A sensitive beneficiary identity or case file is **not** a property of a publicly readable Care Need. The Care domain must use a pseudonymous subject reference; direct identity and contact data must remain outside ordinary Need, Intervention, Commitment and event records. For a partner-led pilot, prefer a partner-issued non-identifying case reference while the originating partner remains responsible for the identity record and participant-facing continuity. If Atlas Care must hold identity/contact data to support a defined service, that mapping must sit behind a separately authorized identity boundary with field-level access, access audit, retention and rights-handling rules. Do not create that store by casually adding personal columns to the Care tables.
 
 Do not add a generic polymorphic graph or a large universal ontology merely to make every possible participant and resource type fit this first model.
+
+### 2.1 Participant reference, notice and processing basis
+
+A subject reference is not an identity record and is not proof of consent. The later design must keep the processing purpose and lawful basis distinct from a consent or notice record. Where consent is relied upon, record what was explained, the specific purpose, the participant's affirmative choice, the actor and time, the method, and any withdrawal or version change. Where another lawful basis is determined by qualified review, record that basis and the required notice without inventing a consent event. Refusal or withdrawal from optional participation must not be used to deny unrelated services or entitlements. No live personal or sensitive data may be collected until the selected pilot's controller/processor roles, purposes, basis, notice, rights channel and retention schedule are approved.
 
 ### 3. The six-stage operational cycle is the domain workflow
 
@@ -113,7 +117,7 @@ M028 does not replace Passport with Laravel Sanctum and does not add an `auth:sa
 
 The implementation must use the existing authenticated user, merchant and administrator surfaces where they are appropriate. It must not invent a new authentication guard or treat an organization name, email address or submitted actor ID as proof of authority.
 
-Partner participation requires an explicit representative and scope of authority. A partner representative may act only for the organization and intervention to which that representative has been granted access. Existing merchants may participate as partners only where the actual organization and representative relationship is established; a merchant account is not automatically an NGO, church, public authority or beneficiary case worker.
+Partner participation requires an explicit, time-bounded representative grant. A grant must identify the authenticated account, partner, permitted actions, resource/intervention scope, issuer, effective period, evidence basis and current status. Authorization must be checked on every read and write against the current grant; revocation or expiry must remove access immediately without deleting historical actions. A grant may not be inferred from an email domain, merchant account or submitted actor ID. High-impact decisions should use separation of duties where practicable: the person who submits or coordinates a need must not silently self-verify delivery or outcome. Existing merchants may participate as partners only where the actual organization and representative relationship is established; a merchant account is not automatically an NGO, church, public authority or beneficiary case worker.
 
 For the first prototype, a coordinator-assisted process may be used where the current account model cannot represent a partner role safely. Do not bypass existing account verification, KYC, PIN, 2FA or authorization controls to make the pilot appear operational.
 
@@ -140,7 +144,7 @@ Care events must distinguish at least:
 
 A hash can help detect changes to a stored or exported payload; it does not prove the underlying claim is true. A participant's confirmation, a partner's dispatch declaration, an administrator's review and an independent attestation are different evidence classes and must remain distinguishable.
 
-Corrections and reassessments should be represented through traceable new records rather than silent edits to consequential history. The implementation must also define how data-subject rights, retention and deletion are honored; append-only event design must not become an excuse to retain unnecessary personal data indefinitely.
+Corrections and reassessments should be represented through traceable new records rather than silent edits to consequential history. Event records must contain the minimum non-identifying metadata needed to explain an action; they must not become a shadow store of names, contact details, health information, exact locations or uploaded document content. The implementation must define per-class retention and deletion/anonymization, including linked files, exports, backups and subject-reference mappings. Where an event must remain for a justified audit purpose, remove or sever unnecessary personal linkage and preserve only the minimum permitted record. A legal hold must be explicit, scoped and reviewed. Append-only history is not a reason to retain personal data indefinitely.
 
 ### 8. AI is decision support, never an authority over human worth
 
@@ -154,13 +158,17 @@ AI may later assist with:
 
 AI must not autonomously decide who deserves assistance, deny a person access to support, infer human worth, or authorize a commitment or disbursement.
 
-Any future recommendation must expose its source records, material assumptions, limitations and model/version context. A named human decision-maker must accept, reject or modify consequential recommendations, with the decision and reason recorded. Sensitive personal attributes must not be used to construct an individual deservingness or universal trust score.
+Any future recommendation must expose its source records, material assumptions, limitations and model/version context. A named human decision-maker must accept, reject or modify consequential recommendations, with the decision and reason recorded. Sensitive personal attributes must not be used to construct an individual deservingness or universal trust score. The first matching workflow must not create a hidden composite score or silently rank people by predicted worth. It may present feasible capability matches with explicit criteria and missing information; urgency and triage decisions must follow published, pilot-approved criteria, be made by an accountable human, and be open to correction or challenge.
 
 ### 9. Accessibility, low-bandwidth use and offline operation are design constraints
 
 The Care interface must be mobile-first, accessible and usable with constrained connectivity. It should support plain-language content, assisted workflows and a path for users who cannot independently operate a smartphone.
 
 Offline capture and later synchronization are future capabilities, not something created by M028. An offline record must be visibly pending synchronization and must not be represented as a server-confirmed commitment, verified delivery or completed payment. Conflict handling, device authorization, consent capture and replay protection require a separate implementation design.
+
+### 9.1 Safeguarding, complaints and challenge are first-class operating requirements
+
+Before a live pilot, its accountable operator must appoint a named safeguarding lead and define safe referral/escalation procedures, including the boundaries of the platform's role. Atlas Care is not an emergency-response, clinical assessment or statutory case-management service. It must provide a safe way to report concerns, contest an inaccurate assessment, request correction, withdraw optional participation and complain without routing the complainant solely back to the person or partner being complained about. Any procedures involving children or adults at risk must be set by a qualified safeguarding owner for the actual pilot context. A pilot without trained human escalation and referral capacity must not collect live safeguarding-sensitive case data.
 
 ### 10. Keep the current persistence and deployment stack until evidence requires a change
 
@@ -207,5 +215,6 @@ This ADR remains **Proposed** until reviewers approve:
 6. The human-approval boundary for matching and AI assistance.
 7. The unchanged financial boundary.
 8. The accessibility and low-bandwidth assumptions for the initial use case.
+9. The subject-reference/identity boundary, lawful-basis and consent distinction, partner-grant lifecycle, retention/erasure rules, and safeguarding/complaint path.
 
 No database migration or runtime implementation may be started on the authority of this Proposed ADR alone. Acceptance requires a reviewed M028 engineering specification and a recorded approval decision.
