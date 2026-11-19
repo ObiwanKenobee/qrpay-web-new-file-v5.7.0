@@ -1,6 +1,6 @@
 # Sanctum Scan — Engineering Roadmap
 
-**Last reconciled:** 2026-11-14  
+**Last reconciled:** 2026-11-15  
 **Purpose:** Keep implemented work, branch state, and future scope consistent. This roadmap distinguishes code merged into `main` from code that exists only on a dependent feature branch.
 
 ## Repository state
@@ -10,11 +10,11 @@
 | 002–009 | Scan references, resource registry, exchange/dispute lifecycle, private evidence, verifier institutions and governance | Implemented | On `main` |
 | 010 | Versioned attestation corrections and protective withdrawal | Implemented | On `main` |
 | 011 | Independent attestation reassessment | Implemented | On `main` |
-| 012 | Participant-scoped provenance export | Implemented on `sanctum-scan/provenance-verifier-hardening-014` | Promotion to `main` pending |
-| 013 | Offline provenance manifest verifier | Implemented on `sanctum-scan/provenance-verifier-hardening-014` | Promotion to `main` pending |
-| 014 | Provenance verifier consistency hardening | Implemented on `sanctum-scan/provenance-verifier-hardening-014` | Promotion to `main` pending |
-| 015 | Manual buyer identity review and optional acceptance gate | In progress on PR #16 | Not merged |
-| 016 | Payment settlement state machine (no movement of funds) | Planned | Not started |
+| 012 | Participant-scoped provenance export | Reconstructed on `sanctum-scan/provenance-mainline-reconstruction-012-014-v2` | Draft review in PR #20 |
+| 013 | Offline provenance manifest verifier | Reconstructed on `sanctum-scan/provenance-mainline-reconstruction-012-014-v2` | Draft review in PR #20 |
+| 014 | Provenance verifier consistency hardening | Reconstructed on `sanctum-scan/provenance-mainline-reconstruction-012-014-v2` | Draft review in PR #20 |
+| 015 | Manual buyer identity review and optional acceptance gate | Merged via PR #16 | On `main` |
+| 016 | Payment settlement state machine (no movement of funds) | Merged via PR #19 | On `main` |
 | 017 | Wallet settlement integration | Deferred until M016 and financial controls are validated | Not started |
 | 018 | Agricultural batch traceability events | Planned | Not started |
 | 019 | Cooperative and group exchange | Planned | Not started |
@@ -22,7 +22,7 @@
 | 021 | Public, anonymised economic intelligence snapshots | Planned | Not started |
 | 022 | Developer SDK and open protocol package | Planned | Not started |
 
-**Important branch distinction:** PRs #13–#15 were merged into their dependent feature branches. That does not mean those changes are present in `main`. The cumulative M012–M014 branch has diverged from the current mainline and is under draft integration review in PR #17. It remains unmerged. Do not advance M015 into a release claim until the provenance stack has been reconciled.
+**Important branch distinction:** M015 and M016 are merged into `main` via PRs #16 and #19. The older cumulative M012–M014 stack remains unmerged in stale PR #17; its mainline-based reconstruction is under draft review in [PR #20](https://github.com/ObiwanKenobee/qrpay-web-new-file-v5.7.0/pull/20). Do not merge or retarget PR #17 as-is.
 
 ## Current engineering principle
 
@@ -31,14 +31,14 @@ The unit of progress is a trustworthy, reviewable capability—not a growing lis
 ## M012 — Participant-scoped provenance export
 
 **ADR:** 0012  
-**Status:** Implemented on the dependent provenance branch; integration pending.
+**Status:** Reconstructed on `sanctum-scan/provenance-mainline-reconstruction-012-014-v2`; under draft review in PR #20.
 
-The buyer and merchant can obtain a participant-scoped JSON provenance manifest for an exchange. The manifest contains the permitted event, evidence, review, attestation, revision, and reassessment history for that participant. Its digest is calculated over the canonical exported data. Private storage paths, raw files, payment credentials, and unrelated participant records are excluded.
+The buyer and merchant can obtain a participant-scoped JSON provenance manifest for an exchange. The manifest contains the permitted event, evidence, review, attestation, revision, and reassessment history for that participant. Its digest is calculated over the canonical exported data. Private storage paths, raw files, provider payment credentials, dedicated payment-reference fields, and unrelated participant records are excluded. Participant-authored terms, messages, resolution summaries, evidence captions and original file names are preserved and may themselves contain sensitive information; consumers must treat the export as private dispute data.
 
 ## M013 — Offline provenance manifest verifier
 
 **ADR:** 0013  
-**Status:** Implemented on the dependent provenance branch; integration pending.
+**Status:** Reconstructed on `sanctum-scan/provenance-mainline-reconstruction-012-014-v2`; under draft review in PR #20. Executable validation remains pending.
 
 A local Artisan command validates an exported manifest without network or database access:
 
@@ -51,7 +51,7 @@ The verifier checks schema, digest, source-evidence binding, review completeness
 ## M014 — Provenance verifier consistency hardening
 
 **ADR:** 0014  
-**Status:** Implemented on the dependent provenance branch; integration pending.
+**Status:** Reconstructed on `sanctum-scan/provenance-mainline-reconstruction-012-014-v2`; under draft review in PR #20. Executable validation remains pending.
 
 The offline verifier rejects malformed or incomplete platform-review digests, inconsistent current attestation projections, malformed revision references, invalid reverse reassessment references, and invalid or duplicate event identifiers. It remains an offline consistency verifier—not a digital-signature or factual-truth oracle.
 
@@ -84,9 +84,9 @@ Introduce a narrow, auditable manual review process before a buyer accepts an ex
 
 ## M016 — Payment settlement state machine
 
-**Status:** Existing foundation on `main`; transition and actor hardening in progress on PR #19.
+**Status:** Merged into `main` via PR #19.
 
-The separate settlement projection and immutable exchange timeline events exist on `main`. PR #18 narrows system transitions to evidence submission, reserves review decisions for authenticated administrators, checks payment evidence amount/currency against the exchange, and requires recorded buyer receipt before `settled`. It adds regression tests for actor boundaries, mismatched evidence and receipt prerequisites.
+The separate settlement projection and immutable exchange timeline events, including actor-boundary hardening, matching immutable payment-evidence checks and the buyer-receipt prerequisite for `settled`, are merged into `main` via PR #19. Regression tests are authored; executable validation remains subject to the repository Actions blocker.
 
 This remains an internal decision record. It does not prove external bank settlement and does not move money. The current immutable evidence record does not yet support replacement after rejection; resubmission is intentionally deferred until a versioned evidence model exists.
 

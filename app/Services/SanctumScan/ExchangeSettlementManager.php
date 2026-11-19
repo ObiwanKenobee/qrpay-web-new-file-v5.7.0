@@ -3,6 +3,7 @@
 namespace App\Services\SanctumScan;
 
 use App\Models\SanctumScanExchange;
+use App\Models\SanctumScanExchangePaymentEvidence;
 use Illuminate\Support\Facades\DB;
 
 class ExchangeSettlementManager
@@ -125,14 +126,27 @@ class ExchangeSettlementManager
             return SettlementTransitionResult::failure('invalid_settlement_transition', $fromStatus, $toStatus);
         }
 
-        if ($toStatus === SettlementStateMachine::VERIFIED) {
-            $paymentEvidence = $exchange->paymentEvidence;
+        $decisionEvidence = null;
 
-            if (! $paymentEvidence
-                || $paymentEvidence->verification_status !== 'unverified'
-                || $this->normalizeDecimal((string) $paymentEvidence->amount) !==
+        if (in_array($toStatus, [
+            SettlementStateMachine::VERIFIED,
+            SettlementStateMachine::REJECTED,
+            SettlementStateMachine::SETTLED,
+        ], true)) {
+            $decisionEvidence = $exchange->paymentEvidence;
+
+            if (! $decisionEvidence) {
+                return SettlementTransitionResult::failure('payment_evidence_missing', $fromStatus, $toStatus);
+            }
+        }
+
+        if ($toStatus === SettlementStateMachine::VERIFIED) {
+            if (
+                $decisionEvidence->verification_status !== 'unverified'
+                || $this->normalizeDecimal((string) $decisionEvidence->amount) !==
                     $this->normalizeDecimal((string) $exchange->amount)
-                || strtoupper((string) $paymentEvidence->currency) !== strtoupper((string) $exchange->currency)) {
+                || strtoupper((string) $decisionEvidence->currency) !== strtoupper((string) $exchange->currency)
+            ) {
                 return SettlementTransitionResult::failure('payment_evidence_mismatch', $fromStatus, $toStatus);
             }
         }
@@ -140,6 +154,18 @@ class ExchangeSettlementManager
         if ($toStatus === SettlementStateMachine::SETTLED
             && ($exchange->status !== 'received' || $exchange->received_at === null)) {
             return SettlementTransitionResult::failure('buyer_receipt_required', $fromStatus, $toStatus);
+        }
+
+        $eventData = [
+            'from' => $fromStatus,
+            'to' => $toStatus,
+            'reason' => $reason,
+        ];
+
+        if ($decisionEvidence !== null) {
+            $eventData['payment_evidence_id'] = (int) $decisionEvidence->getKey();
+            $eventData['payment_evidence_version'] = (int) $decisionEvidence->version;
+            $eventData['payment_evidence_sha256'] = $this->paymentEvidenceFingerprint($decisionEvidence);
         }
 
         $exchange->forceFill([
@@ -154,14 +180,44 @@ class ExchangeSettlementManager
             $actorGuard,
             $actorId,
             $this->verificationStatusFor($actorGuard, $toStatus),
-            [
-                'from' => $fromStatus,
-                'to' => $toStatus,
-                'reason' => $reason,
-            ]
+            $eventData
         );
 
         return SettlementTransitionResult::success($exchange, $fromStatus, $toStatus);
+    }
+
+    /**
+     * Fingerprints the complete immutable evidence version without copying its
+     * payment reference or other submitted fields into the decision event.
+     *
+     * The ordered payload keys and JSON flags are part of the digest contract.
+     */
+    private function paymentEvidenceFingerprint(SanctumScanExchangePaymentEvidence $evidence): string
+    {
+        $payload = [
+            'exchange_id' => (int) $evidence->exchange_id,
+            'evidence_id' => (int) $evidence->getKey(),
+            'version' => (int) $evidence->version,
+            'supersedes_id' => $evidence->supersedes_id === null ? null : (int) $evidence->supersedes_id,
+            'rail' => (string) $evidence->rail,
+            'reference' => (string) $evidence->reference,
+            'amount' => (string) $evidence->amount,
+            'currency' => (string) $evidence->currency,
+            'submitted_by_guard' => (string) $evidence->submitted_by_guard,
+            'submitted_by_id' => (int) $evidence->submitted_by_id,
+            'submitted_at' => $evidence->submitted_at?->utc()->format('Y-m-d\\TH:i:s.u\\Z'),
+        ];
+
+        $canonicalJson = json_encode(
+            $payload,
+            JSON_THROW_ON_ERROR
+                | JSON_UNESCAPED_SLASHES
+                | JSON_UNESCAPED_UNICODE
+                | JSON_INVALID_UTF8_SUBSTITUTE
+                | JSON_PRESERVE_ZERO_FRACTION
+        );
+
+        return hash('sha256', $canonicalJson);
     }
 
     private function actorIdentityIsValid(string $actorGuard, int $actorId): bool

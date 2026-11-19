@@ -81,7 +81,6 @@ class RouteServiceProvider extends ServiceProvider
             Route::middleware(['web','system.maintenance'])
             ->group(base_path('routes/payment-gateway/qr_pay/v1/checkout.php'));
 
-            $this->mapInstallerRoute();
         });
     }
 
@@ -101,15 +100,4 @@ class RouteServiceProvider extends ServiceProvider
         });
     }
 
-    /**
-     * Configure/Place installer routes.
-     *
-     * @return void
-     */
-    protected function mapInstallerRoute() {
-        if(file_exists(base_path('resources/installer/src/routes/web.php'))) {
-            Route::middleware('web')
-                ->group(base_path('resources/installer/src/routes/web.php'));
-        }
-    }
 }

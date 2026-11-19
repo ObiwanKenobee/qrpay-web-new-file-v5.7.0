@@ -111,11 +111,28 @@ jobs:
       - name: Resolve route registry from a migrated database
         run: php artisan route:list --json > /dev/null
 
+<<<<<<< HEAD
       # The dashboard summary is one INSERT ... SELECT whose ONLY_FULL_GROUP_BY
       # violations (SQLSTATE 1055) only surface when the statement executes.
       - name: Build dashboard summary on MySQL
         run: php artisan dashboard:rebuild-stats
 
+=======
+      - name: Run offline provenance verifier unit tests
+        env:
+          APP_ENV: testing
+        run: vendor/bin/phpunit tests/Unit/SanctumScan/ProvenanceManifestVerifierTest.php
+
+      - name: Run offline provenance verifier command tests
+        env:
+          APP_ENV: testing
+        run: vendor/bin/phpunit tests/Feature/SanctumScan/ProvenanceManifestVerifierCommandTest.php
+
+      - name: Run Sanctum Scan feature tests
+        env:
+          APP_ENV: testing
+        run: vendor/bin/phpunit tests/Feature/SanctumScan
+>>>>>>> refs/remotes/origin/feature/qrpay-update
       - name: Roll the newest settlement migration down and up
         run: |
           php artisan migrate:rollback --force \

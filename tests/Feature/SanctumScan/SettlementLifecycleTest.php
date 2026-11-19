@@ -314,7 +314,17 @@ class SettlementLifecycleTest extends TestCase
             'reason' => 'Bank statement reconciled against the declared reference.',
         ])->assertOk()
             ->assertJsonPath('data.exchange.settlement_status', 'payment_verified')
-            ->assertJsonCount(2, 'data.exchange.settlement_events');
+            ->assertJsonCount(2, 'data.exchange.settlement_events')
+            ->assertJsonPath('data.exchange.settlement_events.1.payment_evidence_version', 1);
+
+        $firstEvidence = SanctumScanExchangePaymentEvidence::query()
+            ->where('exchange_id', $exchangeId)
+            ->firstOrFail();
+        $verificationEvent = $this->settlementEvents($exchangeId)->last();
+
+        $this->assertSame((int) $firstEvidence->getKey(), $verificationEvent->event_data['payment_evidence_id']);
+        $this->assertSame(1, $verificationEvent->event_data['payment_evidence_version']);
+        $this->assertMatchesRegularExpression('/\\A[a-f0-9]{64}\\z/', $verificationEvent->event_data['payment_evidence_sha256']);
 
         $this->transition($admin, $exchangeId, [
             'to_status' => 'settled',
@@ -341,6 +351,11 @@ class SettlementLifecycleTest extends TestCase
             $events->pluck('verification_status')->all()
         );
         $this->assertSame($admin->getKey(), $events->last()->recorded_by_id);
+        $this->assertSame(
+            (int) $firstEvidence->getKey(),
+            $events->last()->event_data['payment_evidence_id']
+        );
+        $this->assertSame(1, $events->last()->event_data['payment_evidence_version']);
 
         $this->transition($admin, $exchangeId, [
             'to_status' => 'payment_verified',
@@ -380,6 +395,16 @@ class SettlementLifecycleTest extends TestCase
             ->assertJsonPath('data.exchange.settlement_status', 'payment_rejected');
 
         $this->assertSame('platform_rejected', $this->settlementEvents($exchangeId)->last()->verification_status);
+        $rejectionEvent = $this->settlementEvents($exchangeId)->last();
+        $firstVersionId = (int) SanctumScanExchangePaymentEvidence::query()
+            ->where('exchange_id', $exchangeId)
+            ->where('version', 1)
+            ->value('id');
+
+        $this->assertSame($firstVersionId, $rejectionEvent->event_data['payment_evidence_id']);
+        $this->assertSame(1, $rejectionEvent->event_data['payment_evidence_version']);
+        $firstVersionFingerprint = $rejectionEvent->event_data['payment_evidence_sha256'];
+        $this->assertMatchesRegularExpression('/\\A[a-f0-9]{64}\\z/', $firstVersionFingerprint);
 
         $this->transition($admin, $exchangeId, [
             'to_status' => 'payment_verified',
@@ -436,6 +461,21 @@ class SettlementLifecycleTest extends TestCase
             'reason' => 'The replacement reference reconciled against the merchant statement.',
         ])->assertOk()
             ->assertJsonPath('data.exchange.settlement_status', 'payment_verified');
+
+        $versionTwoEvent = $this->settlementEvents($exchangeId)->last();
+
+        $this->assertSame((int) $evidence[1]->getKey(), $versionTwoEvent->event_data['payment_evidence_id']);
+        $this->assertSame(2, $versionTwoEvent->event_data['payment_evidence_version']);
+        $this->assertMatchesRegularExpression('/\\A[a-f0-9]{64}\\z/', $versionTwoEvent->event_data['payment_evidence_sha256']);
+        $this->assertNotSame($firstVersionFingerprint, $versionTwoEvent->event_data['payment_evidence_sha256']);
+
+        $this->actingAs($admin, 'admin')
+            ->getJson($this->adminSettlementUrl($exchangeId))
+            ->assertOk()
+            ->assertJsonPath('data.exchange.settlement_events.1.payment_evidence_id', $firstVersionId)
+            ->assertJsonPath('data.exchange.settlement_events.1.payment_evidence_version', 1)
+            ->assertJsonPath('data.exchange.settlement_events.3.payment_evidence_id', $evidence[1]->getKey())
+            ->assertJsonPath('data.exchange.settlement_events.3.payment_evidence_version', 2);
     }
 
     public function test_illegal_repeated_stale_and_unknown_transitions_write_no_events(): void
