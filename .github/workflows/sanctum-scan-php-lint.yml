@@ -111,6 +111,11 @@ jobs:
       - name: Resolve route registry from a migrated database
         run: php artisan route:list --json > /dev/null
 
+      # The dashboard summary is one INSERT ... SELECT whose ONLY_FULL_GROUP_BY
+      # violations (SQLSTATE 1055) only surface when the statement executes.
+      - name: Build dashboard summary on MySQL
+        run: php artisan dashboard:rebuild-stats
+
       - name: Roll the newest settlement migration down and up
         run: |
           php artisan migrate:rollback --force \
