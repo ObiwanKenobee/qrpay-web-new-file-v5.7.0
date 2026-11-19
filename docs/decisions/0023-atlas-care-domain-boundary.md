@@ -64,7 +64,7 @@ The initial domain model has five proposed aggregate roots. Care events are a cr
 
 | Aggregate | Responsibility | Principal relationships |
 |---|---|---|
-| Care Need | A consented, assessable description of a need or opportunity requiring a response | May be addressed by one or more interventions |
+| Care Need | An assessable description of a need or opportunity submitted for a documented purpose; sensitive details remain subject to explicit-consent and restricted-data controls | May be addressed by one or more interventions |
 | Care Partner | An organization or accountable community entity participating in the network | Owns or administers capabilities; may sponsor or deliver interventions |
 | Care Capability | A declared resource a partner can make available | Belongs to a partner; may be proposed for an intervention |
 | Care Intervention | A bounded, human-approved plan responding to one or more needs | Links needs, partners, commitments and outcome observations |
@@ -77,7 +77,7 @@ Do not add a generic polymorphic graph or a large universal ontology merely to m
 
 ### 2.1 Participant reference, notice and processing basis
 
-A subject reference is not an identity record and is not proof of consent. The later design must keep the processing purpose and lawful basis distinct from a consent or notice record. Where consent is relied upon, record what was explained, the specific purpose, the participant's affirmative choice, the actor and time, the method, and any withdrawal or version change. Where another lawful basis is determined by qualified review, record that basis and the required notice without inventing a consent event. Refusal or withdrawal from optional participation must not be used to deny unrelated services or entitlements. No live personal or sensitive data may be collected until the selected pilot's controller/processor roles, purposes, basis, notice, rights channel and retention schedule are approved.
+A subject reference is not an identity record and is not proof of consent. The later design must keep the processing purpose and lawful basis distinct from a consent or notice record. Where consent is relied upon, record what was explained, the specific purpose, the participant's affirmative choice, the actor and time, the method, and any withdrawal or version change. Where another lawful basis is determined by qualified review, record that basis and the required notice without inventing a consent event. Consistent with the source brief, Atlas Care must require explicit, informed participant consent before collecting or sharing sensitive case details; this safeguard does not replace a separately determined processing basis, notice or safeguarding process. If a participant cannot safely or validly consent, do not collect the sensitive detail through Atlas Care; use an appropriate partner-led process only after qualified review. Refusal or withdrawal from optional participation must not be used to deny unrelated services or entitlements. No live personal or sensitive data may be collected until the selected pilot's controller/processor roles, purposes, basis, notice, rights channel and retention schedule are approved.
 
 ### 3. The six-stage operational cycle is the domain workflow
 
