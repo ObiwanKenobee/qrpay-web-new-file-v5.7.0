@@ -18,7 +18,7 @@ remain as compatibility pointers only. They are not canonical ADRs; the
 implemented decisions are now registered as ADRs 0020–0022 below.
 ## Numbering
 
-The next available number after ADR 0022 is **0023**. ADR 0014 remains
+The next available number after ADR 0023 is **0024**. ADR 0014 remains
 intentionally unassigned; the old provenance-hardening filename is retained
 only as a compatibility pointer. The provenance decisions use new identifiers
 0020–0022 rather than reusing 0012–0014. Numbers are never recycled.
