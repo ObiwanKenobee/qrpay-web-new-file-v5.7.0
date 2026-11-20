@@ -207,7 +207,7 @@ Coarse location may be sufficient for initial partner matching. Exact household 
 
 This ADR remains **Proposed** until reviewers approve:
 
-1. The Care boundary and six logical aggregates.
+1. The Care boundary and five proposed aggregate roots plus the cross-cutting event log.
 2. The separation of private need/case data from public project information.
 3. The partner representative and delegated-authority model.
 4. The evidence classes and the distinction between declarations, reviews, attestations and outcomes.
