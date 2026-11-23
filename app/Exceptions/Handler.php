@@ -50,13 +50,11 @@ class Handler extends ExceptionHandler
             //
         });
 
-        // A logout page that outlived its session (expired, rotated APP_KEY,
-        // another tab logged out) carries a stale CSRF token. Signing out is
-        // idempotent, so send the operator to the login screen instead of a
-        // dead-end 419 page. Laravel maps TokenMismatchException to a 419
-        // HttpException before render callbacks run, so match on the status.
+        // A stale CSRF token on logout should return the operator to the login
+        // screen. Match the route name rather than a literal URI because the
+        // admin prefix is configurable per installation.
         $this->renderable(function (HttpException $e, Request $request) {
-            if ($e->getStatusCode() !== 419 || ! $request->is('admin/logout')) {
+            if ($e->getStatusCode() !== 419 || ! $request->routeIs('admin.logout')) {
                 return null;
             }
 
