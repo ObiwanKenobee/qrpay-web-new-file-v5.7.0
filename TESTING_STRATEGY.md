@@ -78,7 +78,7 @@ The suite is green on SQLite. Concurrency safety is asserted only by the MySQL-g
 
 [`.github/workflows/sanctum-scan-php-lint.yml`](.github/workflows/sanctum-scan-php-lint.yml) now runs on every push and every pull request:
 
-- **`gates` job** — PHP 8.2, SQLite in-memory:
+- **`gates` job** — PHP 8.4, SQLite in-memory:
   - G1 conflict markers (`tools/check-conflict-markers.php`);
   - G2 `php -l` over every tracked non-Blade PHP file;
   - G3 full PHPUnit suite with no file allowlist;
@@ -251,7 +251,7 @@ Rules:
 
 - No `continue-on-error` for required jobs.
 - Cache Composer dependencies, not `vendor/`.
-- Test the minimum supported PHP version declared in `composer.json` (8.2).
+- Test the minimum supported PHP version declared in `composer.json` (8.4.1).
 - Upload PHPUnit output and coverage artifacts when the suite grows beyond its current runtime.
 - The frontend build stays out of CI until a lockfile is committed; no gate pretends otherwise.
 

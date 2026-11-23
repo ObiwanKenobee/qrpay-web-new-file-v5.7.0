@@ -5,7 +5,7 @@
     "keywords": ["framework", "laravel"],
     "license": "MIT",
     "require": {
-        "php": "^8.2",
+        "php": "^8.4.1",
         "authorizenet/authorizenet": "~2.0.3",
         "buglinjo/laravel-webp": "^3.2",
         "flutterwavedev/flutterwave-v3": "^1.0",
@@ -21,7 +21,7 @@
         "laravel/tinker": "^2.8",
         "laravel/ui": "^4.8",
         "league/flysystem-aws-s3-v3": "^3.30",
-        "maatwebsite/excel": "^3.1",
+        "maatwebsite/excel": "^4.0",
         "paytm/paytmchecksum": "^1.1",
         "pragmarx/google2fa": "^8.0",
         "pusher/pusher-php-server": "^7.2",

@@ -6,7 +6,7 @@ The local launcher binds to `127.0.0.1` by default. It does not create, drop, mi
 
 ## 1. Requirements
 
-- PHP CLI 8.2 or newer.
+- PHP CLI 8.4.1 or newer.
 - The PHP CLI extensions `pdo_mysql`, `mbstring`, `openssl`, `fileinfo`, `ctype`, `json`, `tokenizer`, and `xml`.
 - Composer 2.
 - XAMPP MySQL/MariaDB service.
@@ -125,7 +125,7 @@ bash tools/xampp/serve.sh
 
 The launcher:
 
-- verifies PHP 8.2+ and the required CLI extensions;
+- verifies PHP 8.4.1+ and the required CLI extensions;
 - requires Composer dependencies and a local `.env`;
 - refuses to run unless `APP_ENV=local` and `DB_CONNECTION=mysql`;
 - generates `APP_KEY` only when it is empty;
@@ -171,7 +171,7 @@ This checks the real HTTP response from the Laravel development server. It does 
 
 ### M027 acceptance checklist
 
-- [ ] PHP CLI is 8.2+ and required extensions are loaded.
+- [ ] PHP CLI is 8.4.1+ and required extensions are loaded.
 - [ ] Composer dependencies are installed.
 - [ ] `.env` uses `APP_ENV=local` and the dedicated local MySQL database.
 - [ ] MySQL connection succeeds.

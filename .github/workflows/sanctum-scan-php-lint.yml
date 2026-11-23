@@ -25,7 +25,7 @@ jobs:
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: '8.4'
           extensions: mbstring, sqlite3, pdo_sqlite
           coverage: none
 
@@ -88,7 +88,7 @@ jobs:
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: '8.4'
           extensions: mbstring, pdo_mysql
           coverage: none
 
@@ -111,13 +111,11 @@ jobs:
       - name: Resolve route registry from a migrated database
         run: php artisan route:list --json > /dev/null
 
-<<<<<<< HEAD
       # The dashboard summary is one INSERT ... SELECT whose ONLY_FULL_GROUP_BY
       # violations (SQLSTATE 1055) only surface when the statement executes.
       - name: Build dashboard summary on MySQL
         run: php artisan dashboard:rebuild-stats
 
-=======
       - name: Run offline provenance verifier unit tests
         env:
           APP_ENV: testing
@@ -132,7 +130,6 @@ jobs:
         env:
           APP_ENV: testing
         run: vendor/bin/phpunit tests/Feature/SanctumScan
->>>>>>> refs/remotes/origin/feature/qrpay-update
       - name: Roll the newest settlement migration down and up
         run: |
           php artisan migrate:rollback --force \
