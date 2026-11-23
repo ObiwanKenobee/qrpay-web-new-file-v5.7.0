@@ -1,6 +1,6 @@
 # Engineering Risk Register — QRPay / Sanctum Scan
 
-**Status:** QODOR-001 baseline; updated 2026-11-16 after the QODOR-002 settlement slice  
+**Status:** QODOR-001 baseline; updated 2026-11-19 (R-07 resolved, R-31 added; policy cross-references in [`SECURITY.md`](../../SECURITY.md))  
 **Date:** 2026-11-15 (baseline), 2026-11-16 (status update)  
 **Revision:** `feature/qrpay-update` at `4ddb392` (baseline); working tree after QODOR-002  
 **Scale:** P0 = release/boot blocker; P1 = material security, correctness, or delivery risk; P2 = maintainability or operational risk.
@@ -66,11 +66,11 @@ Likelihood/impact are engineering judgements unless marked **verified**. “Veri
 
 ### R-07 — Installer reset route remains reachable after installation
 
-- **Likelihood:** High (verified)
+- **Likelihood:** High (verified at baseline)
 - **Impact:** High — rewrites environment configuration; can force reinstall flow
-- **Evidence:** [`resources/installer/src/routes/web.php:38`](../../resources/installer/src/routes/web.php#L38) is unauthenticated and writes `PRODUCT_KEY`; installer routes are registered whenever files exist ([`app/Providers/RouteServiceProvider.php:109`](../../app/Providers/RouteServiceProvider.php#L109)).
-- **Mitigation:** Remove installer files from production deployments or gate them on an explicit, server-side lock and authentication. Add a post-install exposure test.
-- **Status:** Open
+- **Evidence:** Historical baseline: the unauthenticated installer reset route (formerly `resources/installer/src/routes/web.php`) wrote `PRODUCT_KEY`, and installer routes were registered whenever files existed. Both the installer directory and its route registration are now absent from the repository; `php artisan route:list --json` contains no installer routes.
+- **Mitigation:** Keep installer files and public installer assets out of deployments; gate any future installer on an explicit, server-side lock and authentication. Add a post-install exposure test when an installer is reintroduced.
+- **Status:** Resolved in the repository 2026-11-19 — installer source, routes and public assets removed; deployments restored from older artifacts must verify their absence.
 
 ### R-08 — Legacy wallet paths use non-locking read-modify-write and nested transactions
 
@@ -192,7 +192,7 @@ Likelihood/impact are engineering judgements unless marked **verified**. “Veri
 
 ### R-22 — PHP/runtime version drift
 
-- **Evidence:** `composer.json` requires `^8.2`; CI uses 8.3; local session used 8.4.13. PHP 8.2 is in security-only support.
+- **Evidence:** `composer.json` requires `^8.4.1`; CI uses 8.4; local session used 8.4.13; the deployment target is PHP 8.5. `maatwebsite/excel` 4.0.7 and PhpSpreadsheet 5.12.0 (`php >=8.1 <8.6`) removed the former PHP 8.5 blocker; PHP 8.2 is no longer installable.
 - **Mitigation:** Choose a supported target, pin it in CI and deployment, and test the minimum supported version.
 
 ### R-23 — Unresolved source provenance and licensing
@@ -250,6 +250,14 @@ Likelihood/impact are engineering judgements unless marked **verified**. “Veri
 - **Mitigation:** The MySQL job seeds `Database\Seeders\RouteIntrospectionSeeder` with the required admin and `virtual_card_apis` rows (ADR 0016 amendment). Removing the fixture requires moving constructor reads behind request-time resolution.
 - **Status:** Mitigated in the gate 2026-11-17; the constructor pattern remains legacy debt.
 
+### R-31 — Legacy virtual-card flow stores PAN and CVV in the application database
+
+- **Likelihood:** Certain (verified 2026-11-19)
+- **Impact:** Critical — stored cardholder data expands PCI DSS scope and enables card fraud if the database is exposed; PAN also appears in transaction messages
+- **Evidence:** Provider responses populate `strowallet_virtual_cards.card_number`, `.cvv`, `.card_number_url` and `.cvv_url` at [`app/Http/Controllers/Api/User/StrowalletVirtualCardController.php:414`](../../app/Http/Controllers/Api/User/StrowalletVirtualCardController.php#L414) through line 428. `virtual_cards.cvv` is declared in [`database/migrations/2023_04_01_065330_create_virtual_cards_table.php:25`](../../database/migrations/2023_04_01_065330_create_virtual_cards_table.php#L25). Both models use plain string casts without encryption ([`app/Models/StrowalletVirtualCard.php:22`](../../app/Models/StrowalletVirtualCard.php#L22), [`app/Models/VirtualCard.php:14`](../../app/Models/VirtualCard.php#L14)). Card PAN is also inserted into transaction `message` strings at [`StrowalletVirtualCardController.php:868`](../../app/Http/Controllers/Api/User/StrowalletVirtualCardController.php#L868) and line 1094.
+- **Mitigation:** Stop persisting CVV and full PAN; keep only the provider token, last four digits and masked PAN. Use provider-hosted secure display URLs for sensitive details. Remove PAN from transaction messages, encrypt any sensitive field that must be retained, purge existing values through a controlled migration, and define the provider's PCI responsibility in writing.
+- **Status:** Open — requires a scoped card-data and financial review before any new card feature ships.
+
 ---
 
 ## Prioritised remediation sequence
@@ -262,4 +270,5 @@ Likelihood/impact are engineering judgements unless marked **verified**. “Veri
 6. ~~**R-11** — complete the settlement slice (QODOR-002).~~ Resolved 2026-11-16; MySQL job wired in M017 and green locally 2026-11-17.
 7. **R-13 / R-29 / R-30** — finish legacy dead-route cleanup, data-dependent route introspection, and remaining documentation reconciliation. ~~R-12 / R-17~~ resolved 2026-11-16 (M018); ~~R-26~~ resolved 2026-11-18.
 8. **R-14 / R-15 / R-16 / R-18 / R-28** — hardening and dependency follow-up.
+9. **R-31** — stop storing CVV/full PAN and remove PAN from transaction messages before any new virtual-card feature ships.
 9. **R-20–R-25** — operational and maintainability work.

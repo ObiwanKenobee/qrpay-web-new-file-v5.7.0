@@ -1,22 +1,26 @@
 # Deploying Sanctum Scan / QRPay on AWS EC2
 
-Single-instance topology: Ubuntu 22.04 or 24.04, Nginx, PHP 8.2+ FPM, MySQL 8
-(or RDS), local filesystem for uploads. This runbook covers the steps a generic
-Laravel guide misses for this application: reference-data seeding, Passport
-keys, the scheduler/queue loop, cache ordering, and the asset symlink.
+Single-instance topology: Ubuntu 22.04 or 24.04, Nginx, PHP 8.4.1+ FPM (8.5 is
+supported), MySQL 8 (or RDS), local filesystem for uploads. This runbook covers
+the steps a generic Laravel guide misses for this application: reference-data
+seeding, Passport keys, the scheduler/queue loop, cache ordering, and the asset
+symlink.
 
 ## 1. Server packages
 
 ```bash
 sudo apt update && sudo apt upgrade -y
+sudo apt install -y software-properties-common
+sudo add-apt-repository -y ppa:ondrej/php
+sudo apt update
 sudo apt install -y nginx mysql-server unzip git \
-  php8.3-cli php8.3-fpm php8.3-mysql php8.3-mbstring php8.3-xml \
-  php8.3-curl php8.3-zip php8.3-gd php8.3-bcmath php8.3-intl \
-  php8.3-redis php8.3-opcache
+  php8.4-cli php8.4-fpm php8.4-mysql php8.4-mbstring php8.4-xml \
+  php8.4-curl php8.4-zip php8.4-gd php8.4-bcmath php8.4-intl \
+  php8.4-redis php8.4-opcache
 # Composer 2 from getcomposer.org, installed to /usr/local/bin/composer
 ```
 
-`composer.json` requires PHP `^8.2`. Verify the runtime can satisfy every
+`composer.json` requires PHP `^8.4.1`. Verify the runtime can satisfy every
 extension after installing dependencies:
 
 ```bash
@@ -52,6 +56,8 @@ Production values that matter for this app:
 | `FILESYSTEM_DISK` | `public` | Local uploads served through `public/storage` |
 | `QUEUE_CONNECTION` | `database` | Requires the `jobs` table (migrated) and a worker |
 | `SESSION_DRIVER` | `file` (default) | Switch to `database`/`redis` before running multiple app servers |
+| `SESSION_SECURE_COOKIE` | `true` | Send the session cookie only over HTTPS (policy SECURITY.md §7.1) |
+| `SESSION_DOMAIN` | your domain | Keep the cookie scoped to the deployed host; leave unset for host-only cookies |
 | `DB_*` | MySQL 8 / RDS values | Charset `utf8mb4`, collation `utf8mb4_unicode_ci` |
 | `SECRET_HASH` | provider webhook secret | Virtual-card webhook signature (`config/virtual_card.php`) |
 

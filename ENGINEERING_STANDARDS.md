@@ -189,6 +189,9 @@ setting, not a code change.
 
 ### 5.7 Security
 
+The platform-wide policy is [SECURITY.md](SECURITY.md); this section lists the
+implementation-level rules that support it.
+
 - Verify webhook signatures where the provider supports them; if it does not, require an authenticated reconciliation path instead of trusting the payload.
 - Do not expose cache/config/route clearing endpoints publicly.
 - Do not issue broadcast/push tokens from caller-supplied user IDs without authentication.
