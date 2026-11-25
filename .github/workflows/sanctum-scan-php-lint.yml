@@ -116,6 +116,12 @@ jobs:
       - name: Build dashboard summary on MySQL
         run: php artisan dashboard:rebuild-stats
 
+      - name: Assert dashboard summary totals and profit on MySQL
+        env:
+          APP_ENV: testing
+          CACHE_DRIVER: array
+        run: vendor/bin/phpunit tests/Feature/AdminDashboardStatsMySqlTest.php
+
       - name: Run offline provenance verifier unit tests
         env:
           APP_ENV: testing
