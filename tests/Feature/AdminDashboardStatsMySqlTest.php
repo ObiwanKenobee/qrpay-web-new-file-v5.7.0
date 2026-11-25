@@ -1,15 +1,15 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Constants\\PaymentGatewayConst;
-use App\\Http\\Helpers\\AdminDashboardStats;
-use App\\Providers\\Admin\\CurrencyProvider;
-use Illuminate\\Foundation\\Testing\\DatabaseTransactions;
-use Illuminate\\Support\\Facades\\Cache;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Str;
-use Tests\\TestCase;
+use App\Constants\PaymentGatewayConst;
+use App\Http\Helpers\AdminDashboardStats;
+use App\Providers\Admin\CurrencyProvider;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Tests\TestCase;
 
 class AdminDashboardStatsMySqlTest extends TestCase
 {
