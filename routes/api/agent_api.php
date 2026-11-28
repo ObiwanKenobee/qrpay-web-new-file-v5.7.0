@@ -21,7 +21,6 @@ use App\Http\Controllers\Api\AppSettingsController;
 use App\Http\Helpers\Api\Helpers;
 use App\Models\Admin\SetupKyc;
 use App\Providers\Admin\BasicSettingsProvider;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -35,15 +34,6 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::get('/clear-cache', function () {
-    Artisan::call('cache:clear');
-    Artisan::call('config:clear');
-    Artisan::call('route:clear');
-    Artisan::call('view:clear');
-    $message = ['success' => ['Clear cache successfully']];
-
-    return Helpers::onlysuccess($message);
-});
 Route::controller(AppSettingsController::class)->prefix('app-settings')->group(function () {
     Route::get('/', 'appSettings');
     Route::get('languages', 'languages')->withoutMiddleware(['system.maintenance.api']);
