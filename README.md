@@ -363,7 +363,6 @@ Potential domains:
 - Renewable energy
 - Biodiversity
 - Education
-- Healthcare
 - Housing
 - Community infrastructure
 
