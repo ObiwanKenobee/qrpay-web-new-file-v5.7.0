@@ -143,7 +143,7 @@ Route::prefix('user')->group(function () {
         Route::get('kyc', [AuthorizationController::class, 'showKycFrom']);
         Route::post('kyc/submit', [AuthorizationController::class, 'kycSubmit']);
         // pusher
-        Route::get('pusher/beams-auth', [AuthorizationController::class, 'pusherBeamsAuth'])->withoutMiddleware(['api', 'auth.api', 'verification.guard.api', 'CheckStatusApiUser', 'user.google.two.factor.api']);
+        Route::get('pusher/beams-auth', [AuthorizationController::class, 'pusherBeamsAuth']);
         // pusher
 
         Route::middleware(['CheckStatusApiUser', 'user.google.two.factor.api'])->group(function () {
