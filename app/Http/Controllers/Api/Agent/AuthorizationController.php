@@ -648,7 +648,9 @@ class AuthorizationController extends Controller
     //========================before registration======================================
     //========================pusher beams registration================================
     public function pusherBeamsAuth(){
-        $userID = request()->user_id ?? null;
+        // The route-specific API authenticator selects the participant guard.
+        // Never allow a caller to mint a push token for another participant ID.
+        $userID = auth()->id();
         if(!$userID){
             $message = ['error'=>[__("Something went wrong! Please try again.")]];
             return Helpers::error($message);

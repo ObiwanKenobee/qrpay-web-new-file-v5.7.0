@@ -172,6 +172,36 @@ class RouteRegistryTest extends TestCase
         );
     }
 
+    public function test_pusher_beams_routes_keep_their_participant_authentication_middleware(): void
+    {
+        $expectedMiddleware = [
+            'api/user/pusher/beams-auth' => 'auth.api',
+            'agent-api/agent/pusher/beams-auth' => 'agent.api',
+            'merchant-api/merchant/pusher/beams-auth' => 'merchant.api',
+        ];
+
+        foreach ($expectedMiddleware as $uri => $requiredMiddleware) {
+            $route = null;
+
+            foreach (Route::getRoutes() as $registeredRoute) {
+                if (
+                    $registeredRoute->uri() === $uri
+                    && in_array('GET', $registeredRoute->methods(), true)
+                ) {
+                    $route = $registeredRoute;
+                    break;
+                }
+            }
+
+            $this->assertNotNull($route, "Expected Pusher Beams route is missing: {$uri}");
+            $this->assertContains(
+                $requiredMiddleware,
+                $route->middleware(),
+                "Pusher Beams route must retain {$requiredMiddleware}: {$uri}"
+            );
+        }
+    }
+
     /**
      * @return array{duplicate_names: list<string>, public_write_routes: list<string>, unresolvable_actions: list<string>}
      */

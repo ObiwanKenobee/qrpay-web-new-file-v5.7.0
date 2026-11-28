@@ -107,7 +107,7 @@ Route::prefix('agent')->group(function () {
         Route::get('kyc', [AuthorizationController::class, 'showKycFrom']);
         Route::post('kyc/submit', [AuthorizationController::class, 'kycSubmit']);
         // pusher
-        Route::get('pusher/beams-auth', [AuthorizationController::class, 'pusherBeamsAuth'])->withoutMiddleware(['api', 'agent.api', 'CheckStatusApiAgent']);
+        Route::get('pusher/beams-auth', [AuthorizationController::class, 'pusherBeamsAuth']);
         // pusher
         Route::middleware(['CheckStatusApiAgent', 'agent.google.two.factor.api'])->group(function () {
             Route::get('dashboard', [UserController::class, 'home']);

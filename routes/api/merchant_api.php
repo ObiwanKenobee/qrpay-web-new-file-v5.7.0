@@ -106,7 +106,7 @@ Route::prefix('merchant')->group(function () {
         Route::post('logout', [LoginController::class, 'logout']);
 
         // pusher
-        Route::get('pusher/beams-auth', [AuthorizationController::class, 'pusherBeamsAuth'])->withoutMiddleware(['api', 'merchant.api']);
+        Route::get('pusher/beams-auth', [AuthorizationController::class, 'pusherBeamsAuth']);
         // pusher
         Route::middleware(['CheckStatusApiMerchant', 'merchant.google.two.factor.api'])->group(function () {
             Route::controller(SanctumScanReferenceController::class)
