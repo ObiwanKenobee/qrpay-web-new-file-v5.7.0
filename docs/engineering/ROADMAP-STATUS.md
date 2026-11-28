@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-17
 **Branch:** `main` with M020 in progress on PR #25, M021 in progress on `sanctum-scan/m021-canonical-provenance-adrs`, and M022 in progress on `sanctum-scan/m022-genuine-settlement-concurrency`
-**Method:** roadmap phases from [`README.md`](../README.md#13-development-roadmap) mapped to repository evidence per ADR 0017. A capability is only **Verified** when an executed test or command proves it; roadmap checkboxes are not evidence.
+**Method:** roadmap phases from [`README.md`](../../README.md#13-development-roadmap) mapped to repository evidence per ADR 0017. A capability is only **Verified** when an executed test or command proves it; roadmap checkboxes are not evidence.
 
 **Current executed baseline:** `composer check` → 96 tests, 1,049 assertions, 1 skipped (MySQL-only concurrency test), green on SQLite; G1, G2, G7, G8 green. Pint passes on all 32 changed PHP files. The MySQL job's full step sequence is green locally on MySQL 9.4 (migrations, route:list 1,347 routes, backfill down/up, concurrency test); only the GitHub runner run is pending.
 
@@ -16,14 +16,14 @@ Status vocabulary (ADR 0017): **Planned** · **In progress** · **Implemented** 
 
 | Roadmap item | Status | Evidence / gap |
 |---|---|---|
-| Sanctum Scan architecture | Verified | [`ARCHITECTURE.md`](../ARCHITECTURE.md) §9 |
+| Sanctum Scan architecture | Verified | [`ARCHITECTURE.md`](../../ARCHITECTURE.md) §9 |
 | Economic object model | Verified | M002–M011 tables, constraints, and append-only event records; module tests |
 | QR schema and payload specification | Verified | `ScanReferenceResolutionTest`, `MerchantScanReferenceLifecycleTest` |
 | Identity references | Implemented | M015 checks and optional gate; ADR 0012 now records the implemented 403 contract |
 | Transaction intents | Verified | offer/accept/decline lifecycle in `EconomicExchangeLifecycleTest` |
 | API contracts | Verified | HTTP tests for buyer/merchant/admin Sanctum routes |
 | Verification and signature requirements | In progress | M008–M014 provide independent verification, participant-scoped provenance export, offline SHA-256 manifest verification and verifier-consistency checks (ADRs 0020–0022); cryptographic signing and trusted timestamps remain absent. M012 snapshot consistency under concurrent writes remains a separate M026 follow-up. |
-| Repository conventions | Implemented | [`ENGINEERING_STANDARDS.md`](../ENGINEERING_STANDARDS.md); ADR 0016 gates wired in M017; CI execution and PHPStan ratchet pending |
+| Repository conventions | Implemented | [`ENGINEERING_STANDARDS.md`](../../ENGINEERING_STANDARDS.md); ADR 0016 gates wired in M017; platform-wide security policy in [`SECURITY.md`](../../SECURITY.md) (v2.0, 2026-11-19); CI execution and PHPStan ratchet pending |
 | Initial technical documentation | Implemented | README plus architecture/feature/testing/ADR set; known drift tracked in R-13 |
 
 ## Phase II — Working Reference Platform

@@ -55,7 +55,7 @@ would have prevented the current boot failure.
 Every tracked `*.php` file — including `resources/installer/**`, `config/**`,
 `routes/**`, `database/**`, and the helper files listed in
 `composer.json`'s `autoload.files` — is checked with `php -l` using the
-project's supported PHP version (8.2). A parse error fails the build.
+project's supported PHP version (8.4.1). A parse error fails the build.
 
 This is deliberately broader than "lint the app directory": the boot blocker
 was in a model loaded indirectly, and helper files are autoloaded on every

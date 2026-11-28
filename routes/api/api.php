@@ -230,6 +230,11 @@ Route::prefix('user')->group(function () {
                     ->whereNumber('exchangeId')
                     ->name('api.user.sanctum.exchanges.dispute.withdraw');
 
+                Route::get('sanctum/exchanges/{exchangeId}/dispute/evidence/provenance', [SanctumScanDisputeEvidenceController::class, 'provenanceExport'])
+                    ->whereNumber('exchangeId')
+                    ->name('api.user.sanctum.exchanges.dispute.evidence.provenance')
+                    ->middleware('throttle:10,1');
+
                 Route::get('sanctum/exchanges/{exchangeId}/dispute/evidence', [SanctumScanDisputeEvidenceController::class, 'index'])
                     ->whereNumber('exchangeId')
                     ->name('api.user.sanctum.exchanges.dispute.evidence.index');
@@ -262,46 +267,6 @@ Route::prefix('user')->group(function () {
             Route::post('delete/account', [UserController::class, 'deleteAccount'])->middleware('app.mode.api');
             Route::get('notifications', [UserController::class, 'notifications']);
             Route::get('get-remaining', [UserController::class, 'getRemainingBalance']);
-                ->name('api.user.sanctum.exchanges.dispute.withdraw');
-
-
-            Route::get('sanctum/exchanges/{exchangeId}/dispute/evidence/provenance', [SanctumScanDisputeEvidenceController::class, 'provenanceExport'])
-                ->whereNumber('exchangeId')
-                ->name('api.user.sanctum.exchanges.dispute.evidence.provenance')
-                ->middleware('throttle:10,1');
-
-            Route::get('sanctum/exchanges/{exchangeId}/dispute/evidence', [SanctumScanDisputeEvidenceController::class, 'index'])
-                ->whereNumber('exchangeId')
-                ->name('api.user.sanctum.exchanges.dispute.evidence.index');
-            Route::post('sanctum/exchanges/{exchangeId}/dispute/evidence', [SanctumScanDisputeEvidenceController::class, 'store'])
-                ->whereNumber('exchangeId')
-                ->name('api.user.sanctum.exchanges.dispute.evidence.store')
-                ->middleware('throttle:3,1');
-            Route::get('sanctum/exchanges/{exchangeId}/dispute/evidence/{evidenceId}/download', [SanctumScanDisputeEvidenceController::class, 'download'])
-                ->whereNumber('exchangeId')
-                ->whereNumber('evidenceId')
-                ->name('api.user.sanctum.exchanges.dispute.evidence.download');
-            Route::post('sanctum/exchanges/{exchangeId}/dispute/evidence/{evidenceId}/attestations/{attestationId}/appeals', [SanctumScanDisputeEvidenceController::class, 'appealAttestation'])
-                ->whereNumber('exchangeId')
-                ->whereNumber('evidenceId')
-                ->whereNumber('attestationId')
-                ->name('api.user.sanctum.exchanges.dispute.evidence.attestations.appeals')
-                ->middleware('throttle:5,1');
-        });
-
-        Route::post('sanctum/exchanges/{exchangeId}/payment-reference', [SanctumScanExchangeController::class, 'submitPaymentReference'])
-            ->whereNumber('exchangeId')
-            ->name('api.user.sanctum.exchanges.payment-reference')
-            ->middleware(['user.pin.setup.guard', 'api.kyc']);
-
-            Route::get('dashboard', [UserController::class,'home']);
-             Route::post('verify/pin', [UserController::class,'pinVerify'])->middleware(['user.pin.setup.guard']);
-            Route::get('profile', [UserController::class,'profile']);
-            Route::post('profile/update', [UserController::class,'profileUpdate'])->middleware('app.mode.api');
-            Route::post('password/update', [UserController::class,'passwordUpdate'])->middleware('app.mode.api');
-            Route::post('delete/account', [UserController::class,'deleteAccount'])->middleware('app.mode.api');
-            Route::get('notifications', [UserController::class,'notifications']);
-            Route::get('get-remaining', [UserController::class,'getRemainingBalance']);
 
             // setup pin
             Route::controller(SetupPinController::class)->prefix('setup/pin')->group(function () {

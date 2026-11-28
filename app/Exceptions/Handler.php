@@ -3,6 +3,9 @@
 namespace App\Exceptions;
 
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Http\Request;
+use Psr\Log\LogLevel;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -10,7 +13,7 @@ class Handler extends ExceptionHandler
     /**
      * A list of exception types with their corresponding custom log levels.
      *
-     * @var array<class-string<\Throwable>, \Psr\Log\LogLevel::*>
+     * @var array<class-string<Throwable>, LogLevel::*>
      */
     protected $levels = [
         //
@@ -19,7 +22,7 @@ class Handler extends ExceptionHandler
     /**
      * A list of the exception types that are not reported.
      *
-     * @var array<int, class-string<\Throwable>>
+     * @var array<int, class-string<Throwable>>
      */
     protected $dontReport = [
         //
@@ -45,6 +48,18 @@ class Handler extends ExceptionHandler
     {
         $this->reportable(function (Throwable $e) {
             //
+        });
+
+        // A stale CSRF token on logout should return the operator to the login
+        // screen. Match the route name rather than a literal URI because the
+        // admin prefix is configurable per installation.
+        $this->renderable(function (HttpException $e, Request $request) {
+            if ($e->getStatusCode() !== 419 || ! $request->routeIs('admin.logout')) {
+                return null;
+            }
+
+            return redirect()->route('admin.login')
+                ->with('error', [__('Your session expired. Please sign in again.')]);
         });
     }
 }

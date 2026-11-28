@@ -787,6 +787,12 @@ Events must preserve their provenance, timestamps, references, authorization con
 
 ## 12. Security, Privacy and Responsible Finance
 
+The platform-wide security policy is defined in [SECURITY.md](SECURITY.md). It covers
+reporting and disclosure, data classification, control requirements for every surface
+(admin, participant panels, APIs, payment callbacks, Sanctum Scan), current enforcement
+status, known deficiencies and incident response. Security-relevant engineering rules
+are in [ENGINEERING_STANDARDS.md](ENGINEERING_STANDARDS.md) §5.7.
+
 Trust cannot be achieved by simply collecting more personal information.
 
 Sanctum Scan should be developed around:

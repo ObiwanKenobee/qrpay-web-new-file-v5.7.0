@@ -82,7 +82,7 @@ Gateway constants are defined in [`app/Constants/PaymentGatewayConst.php`](app/C
 
 | Layer | Technology | Verified version / constraint |
 |---|---|---|
-| Language | PHP | `^8.2` in `composer.json`; CI uses 8.2; local session used 8.4.13 |
+| Language | PHP | `^8.4.1` in `composer.json`; CI uses 8.4; local session used 8.4.13 |
 | Framework | Laravel | locked `v12.72.0` |
 | API auth | Laravel Passport | locked `v13.11.0` |
 | Token package | Laravel Sanctum | locked `v4.4.0`; installed but unused for route protection |
