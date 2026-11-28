@@ -172,6 +172,32 @@ class RouteRegistryTest extends TestCase
         );
     }
 
+    public function test_public_api_cache_clear_routes_are_not_registered(): void
+    {
+        $publicCacheClearUris = [
+            'api/clear-cache',
+            'merchant-api/clear-cache',
+            'agent-api/clear-cache',
+        ];
+
+        $exposedRoutes = [];
+
+        foreach (Route::getRoutes() as $route) {
+            if (
+                in_array('GET', $route->methods(), true)
+                && in_array($route->uri(), $publicCacheClearUris, true)
+            ) {
+                $exposedRoutes[] = 'GET '.$route->uri();
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $exposedRoutes,
+            'Public cache-clearing endpoints must not be registered: '.implode(', ', $exposedRoutes)
+        );
+    }
+
     /**
      * @return array{duplicate_names: list<string>, public_write_routes: list<string>, unresolvable_actions: list<string>}
      */

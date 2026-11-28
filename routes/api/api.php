@@ -36,7 +36,6 @@ use App\Http\Controllers\Api\User\VirtualCardController;
 use App\Http\Helpers\Api\Helpers;
 use App\Models\Admin\SetupKyc;
 use App\Providers\Admin\BasicSettingsProvider;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -56,15 +55,6 @@ Route::prefix('sanctum/v1')->middleware('throttle:30,1')->group(function () {
         ->name('sanctum.scan.resolve');
 });
 
-Route::get('/clear-cache', function () {
-    Artisan::call('cache:clear');
-    Artisan::call('config:clear');
-    Artisan::call('route:clear');
-    Artisan::call('view:clear');
-    $message = ['success' => [__('Clear cache successfully')]];
-
-    return Helpers::onlysuccess($message);
-});
 Route::get('get/basic/data', function () {
     $basic_settings = BasicSettingsProvider::get();
     $user_kyc = SetupKyc::userKyc()->first();
